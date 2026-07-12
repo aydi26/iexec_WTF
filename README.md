@@ -210,7 +210,8 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 
 ### STATE
 - [x] Research & feasibility (S0) · [x] Final verification pass (S1) · [x] Day-0: ETH Sepolia SDK support confirmed · [x] Implementation plan + external verification pass (S3 → `docs/PLAN.md`)
-- [ ] Day-0 remaining: latency bench (incl. production-shaped chained-op RTT) · gateway/subgraph live probe · CCTP on-chain getter sanity (addresses doc-pinned S3) · hookData size + proof-binding test (D-006) · 2 Discord confirmations
+- [x] Day-0 (S4): gateway/subgraph live probe ✓ · CCTP on-chain getters ✓ (maxMessageBodySize=8192 both chains, domains 0/3, Iris fast fee 1–1.3 bps) · repo bootstrapped + toolchain
+- [ ] Day-0 remaining: latency bench (incl. production-shaped chained-op RTT) · hookData size + proof-binding test (D-006) · 2 Discord confirmations
 - [ ] Wrappers ×2 · [ ] Batcher · [ ] Settlement+CCTP · [ ] Distributor · [ ] Integrity+fallback · [ ] Frontend · [ ] Auditor · [ ] E2E no-mock · [ ] Video+feedback+X
 
 ### Decision Log
@@ -252,6 +253,13 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 **Open:** Phase-0 live bench (incl. production-shaped chained-op RTT + proof-binding test — needs funded `.env`) · Discord Q1/Q2 posting + answers · remaining README prose amendments (Phase 7 list in `docs/PLAN.md` §1) · D-007/8/9 node_modules re-confirmation before contract code.
 **Next:** Phase 0 execution (0b–0f).
 **feedback.md candidates:** docs Networks page data is client-side-only (unscrapable) · handle-layout "[26-29]" docs claim unsourced · `nox-hardhat-plugin@0.1.0` published but template.
+
+#### Session 4 — 2026-07-12 — claude — Phase 0a + 0c/0d execution (repo bootstrap + keyless probes)
+**Done:** repo bootstrapped — `README.md` renamed + §5 corrections landed, `docs/PLAN.md`, `CLAUDE.md`, `feedback.md` seed, `docs/DISCORD_QUESTIONS.md`, `.gitignore`/`.env.example` (commit `e9b37bf`); toolchain pinned (handle beta.13, protocol 0.2.4, confidential 0.2.2, ethers 6, hardhat 3, tsx — commit `b728808`); `.env` created with the funded account (gitignored, verified 6 ways — key exists ONLY in `.env`); `scripts/probe_infra.ts` written + run (13/13 pass).
+**Verified (LIVE on-chain / API, 2026-07-12):** Nox gateway up (`{"service":"Handle Gateway"}`); status page operational; **subgraphs healthy — ETH Sep lag 1 block (~12 s), Arb Sep lag 2 blocks, no indexing errors** (R6 low); NoxCompute proxies present both chains; CCTP `TokenMessengerV2` present both chains · **`MessageTransmitterV2` on-chain getters: `maxMessageBodySize=8192` on BOTH chains** (hookData budget ≈ 7964 B confirmed live, not just from deploy script), `localDomain` = 0 (ETH) / 3 (Arb), `version=1` · **Iris testnet fees: Fast (threshold 1000) = 1 bps ETH→Arb, 1.3 bps Arb→Eth; Standard = 0 bps** (for A=10 USDC, fast maxFee ≈ 0.001 USDC — negligible, confirms D-005) · fast-burn allowance ~100 B USDC (no constraint). Funded account `0x3Da27411b65b9dBD879291ffC87f2f1b28d4d8a5`: 0.1 ETH each chain, 10 USDC ETH Sep.
+**Open:** latency bench (0b, needs the same funded key — writes txs) · hookData size + proof-binding (0e) · Discord Q1/Q2. **Demo-funding note:** only 10 USDC on ONE address — enough for a single-account smoke epoch, but the k-anonymity demo wants 3 distinct depositor addresses + ~60 USDC across rehearsals (faucet banking, 20 USDC/2 h/address). Flagged to user.
+**Next:** 0b latency bench + 0e hookData tests.
+**feedback.md candidates:** `pnpm@11` fails its own script-run preflight on any un-approved build script (esbuild) even with `onlyBuiltDependencies` set — had to invoke `tsx` via the direct bin path (not Nox-specific, but bit the setup).
 
 ## 14. License & Disclaimer
 
