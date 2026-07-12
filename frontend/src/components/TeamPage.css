@@ -1,0 +1,27 @@
+/* ===== TEAM PAGE ===== */
+.team-page {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+}
+
+.team-hero {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.team-title {
+  font-size: 36px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 2px;
+}
+
+/* Grid */
+.team-grid {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}

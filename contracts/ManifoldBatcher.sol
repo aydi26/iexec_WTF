@@ -8,6 +8,8 @@ import {IERC7984} from "@iexec-nox/nox-confidential-contracts/contracts/interfac
 import {IERC20ToERC7984Wrapper} from
     "@iexec-nox/nox-confidential-contracts/contracts/interfaces/IERC20ToERC7984Wrapper.sol";
 import {ITokenMessengerV2} from "./interfaces/ITokenMessengerV2.sol";
+import {IMessageTransmitterV2} from "./interfaces/IMessageTransmitterV2.sol";
+import {CCTPMessageParser} from "./lib/CCTPMessageParser.sol";
 
 /// @title ManifoldBatcher (ETH Sepolia source leg) — see docs/PLAN.md §3.1.
 /// @notice Confidential cUSDC deposits accumulate into an encrypted sum; one
@@ -17,6 +19,8 @@ import {ITokenMessengerV2} from "./interfaces/ITokenMessengerV2.sol";
 /// pre-register their dst claim on the Distributor; here we only record the
 /// (recipient, dstHandle) pairs to build claimsHash.
 contract ManifoldBatcher {
+    using CCTPMessageParser for bytes;
+
     enum State { Open, Closed, Settled, Refunded }
 
     struct Entry {
@@ -42,6 +46,7 @@ contract ManifoldBatcher {
     IERC7984 public immutable cusdc; // our ManifoldCUSDC wrapper (as ERC-7984)
     IERC20ToERC7984Wrapper public immutable wrapper; // same address, wrapper view
     ITokenMessengerV2 public immutable tokenMessenger;
+    IMessageTransmitterV2 public immutable messageTransmitter; // for the refund leg
     uint32 public immutable dstDomain; // Arbitrum = 3
     uint32 public immutable minDepositors; // k-anonymity floor (3)
     uint32 public immutable maxClaims;
@@ -75,6 +80,7 @@ contract ManifoldBatcher {
         IERC20 _usdc,
         address _cusdc,
         ITokenMessengerV2 _tokenMessenger,
+        IMessageTransmitterV2 _messageTransmitter,
         uint32 _dstDomain,
         uint32 _minDepositors,
         uint32 _maxClaims
@@ -83,6 +89,7 @@ contract ManifoldBatcher {
         cusdc = IERC7984(_cusdc);
         wrapper = IERC20ToERC7984Wrapper(_cusdc);
         tokenMessenger = _tokenMessenger;
+        messageTransmitter = _messageTransmitter;
         dstDomain = _dstDomain;
         minDepositors = _minDepositors;
         maxClaims = _maxClaims;
@@ -92,7 +99,7 @@ contract ManifoldBatcher {
 
     /// @dev One-time wiring of the destination peer; enables bridging.
     function wirePeer(bytes32 _remoteDistributor) external {
-        if (remoteDistributor != bytes32(0)) revert AlreadyWired();
+        if (msg.sender != deployer) revert AlreadyWired(); // deployer-only config; re-settable
         remoteDistributor = _remoteDistributor;
         bridgeEnabled = true;
         emit PeerWired(_remoteDistributor);
@@ -189,6 +196,32 @@ contract ManifoldBatcher {
             );
         }
         _openEpoch(epochId + 1);
+    }
+
+    /// @notice Receive a refund leg from the Distributor (fallback path): re-wrap A
+    /// and confidentially credit each active depositor their attested source amount.
+    function relayRefund(uint256 epochId, bytes calldata message, bytes calldata attestation) external {
+        Epoch storage e = epochs[epochId];
+        if (e.state != State.Settled || e.refunded) revert NotClosed();
+        require(messageTransmitter.receiveMessage(message, attestation), "receiveMessage failed");
+        require(message.sourceDomain() == dstDomain, "bad srcDomain");
+        require(message.bodyMessageSender() == remoteDistributor, "bad sender");
+        require(message.bodyMintRecipient() == bytes32(uint256(uint160(address(this)))), "bad recipient");
+        require(abi.decode(message.hookData(), (uint256)) == epochId, "epoch");
+
+        uint256 a = e.aggregate;
+        usdc.approve(address(wrapper), a);
+        wrapper.wrap(address(this), a); // fee buffer covers the inbound refund fee
+        uint256 n = e.entries.length;
+        for (uint256 i; i < n; ++i) {
+            Entry storage en = e.entries[i];
+            if (en.withdrawn) continue;
+            Nox.allowTransient(en.transferred, address(wrapper));
+            cusdc.confidentialTransfer(en.depositor, en.transferred); // recipient ACL via token _update
+        }
+        e.refunded = true;
+        e.state = State.Refunded;
+        emit EpochRefunded(epochId);
     }
 
     /// @notice Grant an auditor view access to a depositor's amount. Add-only:
