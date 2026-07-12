@@ -19,3 +19,5 @@ typechain-types/
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Manifold contract addresses per chain (safe to commit — public)

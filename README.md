@@ -213,7 +213,7 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 - [x] Day-0 (S4): gateway/subgraph live probe ✓ · CCTP on-chain getters ✓ (maxMessageBodySize=8192 both chains, domains 0/3, Iris fast fee 1–1.3 bps) · repo bootstrapped + toolchain
 - [x] Day-0 (S5): **latency bench = GO-LIVE both chains** (ETH Sep prodRTT median 7.0s/p90 7.5s; Arb prodRTT 1.7s) · proof=137 B → hookData N=10 ≈ 3.3 KB ≪ 7964 B (inline fits on SIZE) · toolchain compiles (solc 0.8.35, Nox lib)
 - [ ] Day-0 remaining: **D-006** — inline fits on size but owner-binding (`ownerInProof==owner`, source-confirmed + positive bench) points to option B; confirm negative case (3rd-party submit reverts) in Phase 1 · 2 Discord confirmations (posted?)
-- [~] Wrappers: ETH Sep ✅ deployed + live cycle verified (Arb pending) · [ ] Batcher · [ ] Settlement+CCTP · [ ] Distributor · [ ] Integrity+fallback · [ ] Frontend · [ ] Auditor · [ ] E2E no-mock · [ ] Video+feedback+X
+- [~] Wrappers: ETH Sep ✅ deployed + live cycle verified (Arb pending) · [x] Batcher ✅ deployed + live micro-epoch (source-leg E2E) · [ ] Settlement+CCTP · [ ] Distributor · [ ] Integrity+fallback · [ ] Frontend · [ ] Auditor · [ ] E2E no-mock · [ ] Video+feedback+X
 
 ### Decision Log
 | ID | Decision | Alternatives | Rationale | Date |
@@ -247,6 +247,13 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 **Done:** full rewrite for signal density (485 → ~230 lines): deduplicated Hooks/CCTP rows and the reveal-pattern explanation (now §6 only), merged setup+runbook, compressed worklog narratives to fact bullets, updated STATE, added D-006 placeholder and the 3-week plan. **No verified fact, address, guardrail, or open question was removed.**
 
 <!-- APPEND NEW SESSIONS BELOW THIS LINE -->
+
+#### Session 7 — 2026-07-12 — claude — Phase 2: ManifoldBatcher live source-leg E2E
+**Done:** `contracts/interfaces/ITokenMessengerV2.sol` (vendored CCTP V2 sig); `contracts/ManifoldBatcher.sol` (constructor init, deposit, withdrawDeposit, closeEpoch, settleEpoch, grantAuditor, wirePeer, getters) — compiles solc 0.8.35; `scripts/01_batcher_micro_epoch.ts`. Adjusted for D-006 option B: `deposit(dstRecipient, srcHandle, srcProof, dstHandle)` stores (recipient, dstHandle) for the `claimsHash` commitment (no inline dst proof).
+**Verified (LIVE, ETH Sepolia, 2026-07-12):** ManifoldBatcher `0x72045c0C39F54D84C3E46f98defdb9A409607Ebe`. Full source-leg micro-epoch: pre-fund (wrap 0.5 USDC → cUSDC, setOperator) → **3 hidden-amount deposits (0.10/0.15/0.20 USDC — none on-chain)** → activeCount=3 (minDepositors gate) → closeEpoch (SITE 1 reveal + wrapper unwrap co-initiated) → keeper fetched BOTH proofs concurrently (encSum=450000 == unwrapRequestId=450000, one 2.8s wall-clock RTT — **confirms D-007**) → settleEpoch verified A on-chain, **balance-delta == A check passed**, state→Settled, next epoch opened. Bridge gated off (`bridgeEnabled=false`) for this smoke test. **DoD ① source half achieved.**
+**Open:** L1 unit tests (live integration covers the path; units deferred) · Phase 3 CCTP leg + Distributor (option-B pre-registration redesign) · Arb wrapper deploy · wire peers. **Note:** micro-epoch leaves 0.45 USDC in the Batcher (bridge off, no recovery) — expected for the test.
+**Next:** Phase 3 — Distributor + CCTP cross-chain (fresh session recommended; larger chunk).
+**feedback.md candidates:** none new.
 
 #### Session 6 — 2026-07-12 — claude — Phase 1: cUSDC wrapper deployed + verified live; D-006 decided
 **Done:** OZ 5.6.1 installed; `ManifoldCUSDC.sol` (thin concrete subclass of the official abstract optimized wrapper — G1-clean, adds no logic) compiles (18 files, solc 0.8.35); `scripts/lib/common.ts`, `scripts/00_wrapper_deploy_verify.ts`, `scripts/verify_binding.ts`; deployment registry `deployments/<chainId>.json`.
