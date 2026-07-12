@@ -1,0 +1,21 @@
+# Secrets — G7: gitignored from commit #1, never staged
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Node / build
+node_modules/
+dist/
+coverage/
+
+# Hardhat
+artifacts/
+cache/
+typechain/
+typechain-types/
+
+# OS / editor
+.DS_Store
+Thumbs.db
