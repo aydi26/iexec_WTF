@@ -20,6 +20,9 @@
 - **[2026-07-12] `@iexec-nox/nox-protocol-contracts` pins `pragma solidity ^0.8.35`** while `nox-confidential-contracts` uses `^0.8.28` — consumers must use solc ≥ 0.8.35 (a very new release) to depend on the SDK library; a note on the minimum supported/tested solc version would help.
 - **[2026-07-12] `ERC20ToERC7984Wrapper` is `abstract`** (must be subclassed with an `_update` override choosing optimized vs raw primitives) — there is no directly-deployable concrete wrapper in the package. A ready-to-deploy reference wrapper (or a documented minimal subclass) would speed integration.
 
+- **[2026-07-12] `confidentialTransfer(to, euint256 amount)` does not grant the caller ACL on the returned handle** — unlike `confidentialTransferFrom`, which does `Nox.allowTransient(transferred, msg.sender)`. A contract that distributes and then tries to `allow(transferred, recipient)` reverts with the opaque `UnauthorizedSender`. Either symmetry with `confidentialTransferFrom` or a doc note would save a debugging session.
+- **[2026-07-12] `UnauthorizedSender(address)` is hard to diagnose** — it carries only the sender, not which handle/grant failed. Root-causing required matching the 4-byte selector against the ACL module. An error including the handle (like `ERC7984UnauthorizedUseOfEncryptedAmount`) would be clearer.
+
 ## Infra (gateway / KMS / runner / subgraphs)
 
-- (pending — latency bench results and any incidents land here)
+- **[2026-07-12] All green during the build.** Latency bench = GO-LIVE both chains (production-shaped reveal RTT: ETH Sepolia median 7.0s / p90 7.5s, Arb 1.7s; KMS is not the bottleneck, block time is). Subgraph lag 1–2 blocks. Gateway/status healthy. No incidents across a full day of E2E runs. Credit where due: the confidential round-trip is fast enough for a live 4-minute demo.
