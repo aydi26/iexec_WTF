@@ -17,7 +17,7 @@ const ERC20 = [
 async function main() {
   const eth = connect(CHAINS.eth);
   const arb = connect(CHAINS.arb);
-  const me = eth.wallet.address;
+  const me = await eth.wallet.getAddress();
   const ethUsdc = (ADDR.USDC as any)[11155111];
   const arbUsdc = (ADDR.USDC as any)[421614];
   const dist = deployments(421614).NoxusDistributor;

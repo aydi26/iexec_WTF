@@ -13,15 +13,25 @@ import {CCTPMessageParser} from "./lib/CCTPMessageParser.sol";
 
 /// @title NoxusBatcher (ETH Sepolia source leg) — see docs/PLAN.md §3.1.
 /// @notice Confidential cUSDC deposits accumulate into an encrypted sum; one
-/// public aggregate A is revealed at settle and bridged via CCTP V2 with a
-/// hookData commitment (epochId + claimsHash) binding the destination claims.
-/// Individual amounts never touch the chain. D-006 = option B: depositors
-/// pre-register their dst claim on the Distributor; here we only record the
-/// (recipient, dstHandle) pairs to build claimsHash.
+/// public aggregate A is revealed at settle and bridged via CCTP V2. The hookData
+/// ships the ordered, source-authenticated list of active claims
+/// (epochId + ClaimId[]) so the Distributor resolves exactly those
+/// pre-registrations and ignores any injected extras. Individual amounts never
+/// touch the chain. D-006 = option B: depositors pre-register their dst claim on
+/// the Distributor; here we only record the (recipient, dstHandle) pairs.
 contract NoxusBatcher {
     using CCTPMessageParser for bytes;
 
     enum State { Open, Closed, Settled, Refunded }
+
+    /// @dev One committed destination claim: the (recipient, dstHandle) pair the
+    /// Distributor keys its pre-registration on. Shipped in deposit order over the
+    /// ACTIVE (non-withdrawn) entries — this ordered list binds the source batch to
+    /// the destination claim set.
+    struct ClaimId {
+        address recipient;
+        bytes32 dstHandle;
+    }
 
     struct Entry {
         address depositor;
@@ -63,7 +73,7 @@ contract NoxusBatcher {
     event Deposited(uint256 indexed epochId, address indexed depositor, address indexed recipient, uint256 index);
     event DepositWithdrawn(uint256 indexed epochId, uint256 index);
     event EpochClosed(uint256 indexed epochId, uint32 activeCount);
-    event EpochSettled(uint256 indexed epochId, uint256 aggregate, bytes32 claimsHash);
+    event EpochSettled(uint256 indexed epochId, uint256 aggregate);
     event EpochRefunded(uint256 indexed epochId);
     event PeerWired(bytes32 remoteDistributor);
 
@@ -97,9 +107,10 @@ contract NoxusBatcher {
         _openEpoch(0);
     }
 
-    /// @dev One-time wiring of the destination peer; enables bridging.
+    /// @dev One-shot wiring of the destination peer; enables bridging. First wire
+    /// wins and is immutable after (the deploy script wires once right after deploy).
     function wirePeer(bytes32 _remoteDistributor) external {
-        if (msg.sender != deployer) revert AlreadyWired(); // deployer-only config; re-settable
+        if (remoteDistributor != bytes32(0)) revert AlreadyWired();
         remoteDistributor = _remoteDistributor;
         bridgeEnabled = true;
         emit PeerWired(_remoteDistributor);
@@ -185,11 +196,13 @@ contract NoxusBatcher {
 
         e.aggregate = a;
         e.state = State.Settled;
-        bytes32 claimsHash = _claimsHash(e);
-        emit EpochSettled(epochId, a, claimsHash);
+        emit EpochSettled(epochId, a);
 
         if (bridgeEnabled) {
-            bytes memory hookData = abi.encode(epochId, e.activeCount, claimsHash);
+            // Ship the ordered ACTIVE claim set; the Distributor resolves exactly
+            // these pre-registrations (in order) and ignores any injected extras.
+            ClaimId[] memory claims = _activeClaims(e);
+            bytes memory hookData = abi.encode(epochId, claims);
             usdc.approve(address(tokenMessenger), a);
             tokenMessenger.depositForBurnWithHook(
                 a, dstDomain, remoteDistributor, address(usdc), remoteDistributor, maxFee, FAST_THRESHOLD, hookData
@@ -203,6 +216,12 @@ contract NoxusBatcher {
     function relayRefund(uint256 epochId, bytes calldata message, bytes calldata attestation) external {
         Epoch storage e = epochs[epochId];
         if (e.state != State.Settled || e.refunded) revert NotClosed();
+        require(message.length >= 376, "short msg"); // guard fixed-offset field reads
+        // CEI: mark refunded/Refunded BEFORE any external call (receiveMessage /
+        // wrap / confidentialTransfer loop) so a reentry cannot re-enter this path.
+        e.refunded = true;
+        e.state = State.Refunded;
+
         require(messageTransmitter.receiveMessage(message, attestation), "receiveMessage failed");
         require(message.sourceDomain() == dstDomain, "bad srcDomain");
         require(message.bodyMessageSender() == remoteDistributor, "bad sender");
@@ -219,8 +238,6 @@ contract NoxusBatcher {
             Nox.allowTransient(en.transferred, address(wrapper));
             cusdc.confidentialTransfer(en.depositor, en.transferred); // recipient ACL via token _update
         }
-        e.refunded = true;
-        e.state = State.Refunded;
         emit EpochRefunded(epochId);
     }
 
@@ -256,10 +273,6 @@ contract NoxusBatcher {
         return (en.depositor, en.recipient, en.dstHandle, en.withdrawn);
     }
 
-    function claimsHashOf(uint256 epochId) external view returns (bytes32) {
-        return _claimsHash(epochs[epochId]);
-    }
-
     // --- internal ---
     function _openEpoch(uint256 epochId) internal {
         currentEpoch = epochId;
@@ -269,16 +282,18 @@ contract NoxusBatcher {
         Nox.allowThis(e.encSum);
     }
 
-    /// @dev keccak over ordered active (recipient, dstHandle) pairs — binds the
-    /// source batch to the destination pre-registrations (verified by the Distributor).
-    function _claimsHash(Epoch storage e) internal view returns (bytes32) {
-        bytes memory buf;
+    /// @dev The ordered ACTIVE (recipient, dstHandle) pairs in deposit order —
+    /// the source-authenticated committed list that binds the source batch to the
+    /// destination pre-registrations (resolved in order by the Distributor).
+    function _activeClaims(Epoch storage e) internal view returns (ClaimId[] memory) {
+        ClaimId[] memory claims = new ClaimId[](e.activeCount);
+        uint256 j;
         uint256 n = e.entries.length;
         for (uint256 i; i < n; ++i) {
             Entry storage en = e.entries[i];
             if (en.withdrawn) continue;
-            buf = abi.encodePacked(buf, en.recipient, en.dstHandle);
+            claims[j++] = ClaimId(en.recipient, en.dstHandle);
         }
-        return keccak256(buf);
+        return claims;
     }
 }

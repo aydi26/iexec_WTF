@@ -19,10 +19,11 @@ async function main() {
   const a = artifact("BenchHarness");
   const harness = new Contract(harnessAddr, a.abi, wallet);
   const handle = await handleClient(wallet);
+  const me = await wallet.getAddress();
   const other = Wallet.createRandom().address; // a different address; never signs
 
   console.log(`\n=== ${c.name} — proof owner-binding test ===`);
-  console.log(`harness=${harnessAddr}\nowner(deployer)=${wallet.address}\nthirdParty=${other}`);
+  console.log(`harness=${harnessAddr}\nowner(deployer)=${me}\nthirdParty=${other}`);
 
   // input created by deployer (owner=deployer, app=harness)
   const enc = await handle.encryptInput(123n, "uint256", harnessAddr as `0x${string}`);
@@ -31,7 +32,7 @@ async function main() {
   // POSITIVE control: owner submits -> should simulate OK
   let positiveOk = false;
   try {
-    await provider.call({ to: harnessAddr, from: wallet.address, data });
+    await provider.call({ to: harnessAddr, from: me, data });
     positiveOk = true;
   } catch (e: any) {
     console.log(`positive control unexpectedly reverted: ${String(e?.shortMessage ?? e?.message).slice(0, 140)}`);

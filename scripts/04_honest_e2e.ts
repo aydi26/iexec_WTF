@@ -5,7 +5,7 @@
  * relays the mint, runs the on-chain integrity check (Sum == A), and distributes
  * confidentially. Amounts 0.10 / 0.15 / 0.20 USDC (self as recipient for the smoke).
  */
-import { Contract, hexlify } from "ethers";
+import { Contract } from "ethers";
 import { CHAINS, connect, handleClient, deployments, artifact, ADDR, publicDecryptWithRetry } from "./lib/common.js";
 import { fetchAttestation, computeMaxFee } from "./lib/cctp.js";
 
@@ -20,7 +20,7 @@ const USDC_ABI = ["function approve(address,uint256) returns (bool)", "function 
 async function main() {
   const eth = connect(CHAINS.eth);
   const arb = connect(CHAINS.arb);
-  const me = eth.wallet.address;
+  const me = await eth.wallet.getAddress();
   const ethH = await handleClient(eth.wallet);
   const arbH = await handleClient(arb.wallet);
 
@@ -53,11 +53,9 @@ async function main() {
     console.log(`depositor ${i + 1}/3: preRegistered (Arb) + deposited (ETH), amount hidden`);
   }
 
-  // claimsHash must match across chains
-  const chBatcher = await batcher.claimsHashOf(epochId);
-  const chDist = await dist.claimsHashOf(epochId);
-  console.log(`claimsHash batcher=${chBatcher.slice(0, 18)} dist=${chDist.slice(0, 18)} match=${chBatcher === chDist}`);
-  if (chBatcher !== chDist) throw new Error("claimsHash mismatch — check ordering");
+  // (Cross-chain claim binding is now enforced on-chain: settleEpoch ships the
+  // ordered committed ClaimId[] in hookData and the Distributor resolves exactly
+  // those pre-registrations — no positional claimsHash cross-check needed.)
 
   // close + settle (dual-proof, one RTT) -> burn+bridge
   await (await batcher.closeEpoch()).wait();

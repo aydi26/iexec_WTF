@@ -15,7 +15,7 @@ const NOX = "0x24Ef36Ec5b626D7DCD09a98F3083c2758F0F77bF"; // ETH Sepolia NoxComp
 
 async function main() {
   const eth = connect(CHAINS.eth);
-  const me = eth.wallet.address;
+  const me = await eth.wallet.getAddress();
   const ethH = await handleClient(eth.wallet);
   const cusdcAddr = deployments(11155111).NoxusCUSDC;
   const batcherAddr = deployments(11155111).NoxusBatcher;

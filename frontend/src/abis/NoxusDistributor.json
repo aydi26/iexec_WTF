@@ -56,16 +56,6 @@
     "type": "error"
   },
   {
-    "inputs": [],
-    "name": "ClaimsHashMismatch",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "CountMismatch",
-    "type": "error"
-  },
-  {
     "inputs": [
       {
         "internalType": "bytes",
@@ -229,9 +219,9 @@
       },
       {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "index",
-        "type": "uint256"
+        "internalType": "bytes32",
+        "name": "dstHandle",
+        "type": "bytes32"
       }
     ],
     "name": "PreRegistered",
@@ -255,6 +245,25 @@
     ],
     "name": "RefundInitiated",
     "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      }
+    ],
+    "name": "bufferShortfall",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [
@@ -333,25 +342,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "epochId",
-        "type": "uint256"
-      }
-    ],
-    "name": "claimsHashOf",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "cusdc",
     "outputs": [
@@ -362,6 +352,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      }
+    ],
+    "name": "declareFallback",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -406,6 +409,11 @@
         "internalType": "uint256",
         "name": "claimCount",
         "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "hasMissing",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",

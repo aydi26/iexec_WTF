@@ -23,7 +23,7 @@ const CUSDC_ABI = [
 async function main() {
   const c = CHAINS.eth;
   const { wallet } = connect(c);
-  const me = wallet.address;
+  const me = await wallet.getAddress();
   const handle = await handleClient(wallet);
   const usdcAddr = (ADDR.USDC as any)[c.chainId];
   const cusdcAddr = deployments(c.chainId).NoxusCUSDC;
@@ -91,8 +91,7 @@ async function main() {
   if (info[2] !== total) throw new Error(`aggregate ${info[2]} != ${total}`);
   if (info[0] !== 2n) throw new Error(`state ${info[0]} != Settled(2)`);
 
-  const claimsHash = await batcher.claimsHashOf(0);
-  console.log(`\nMICRO-EPOCH OK: 3 hidden deposits -> A=${info[2]} (0.45 USDC) revealed & settled; claimsHash=${claimsHash.slice(0, 18)}...`);
+  console.log(`\nMICRO-EPOCH OK: 3 hidden deposits -> A=${info[2]} (0.45 USDC) revealed & settled.`);
   console.log(`next epoch open: currentEpoch=${await batcher.currentEpoch()}`);
 }
 

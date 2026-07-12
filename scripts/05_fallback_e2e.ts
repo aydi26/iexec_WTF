@@ -21,7 +21,7 @@ const USDC_ABI = ["function approve(address,uint256) returns (bool)", "function 
 async function main() {
   const eth = connect(CHAINS.eth);
   const arb = connect(CHAINS.arb);
-  const me = eth.wallet.address;
+  const me = await eth.wallet.getAddress();
   const ethH = await handleClient(eth.wallet);
   const arbH = await handleClient(arb.wallet);
 

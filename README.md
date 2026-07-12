@@ -51,7 +51,7 @@ sequenceDiagram
     end
 ```
 
-**What an observer sees per epoch:** the participant set (visible), the recipient set (visible), and the aggregate `A` (one public number, unavoidable) — but never a per-user deposit, never a per-recipient payout, never any individual amount. An auditor can still view any single amount on demand via a revocable on-chain grant.
+**What an observer sees per epoch:** the participant set (visible), the recipient set (visible), and the aggregate `A` (one public number, unavoidable) — but never a per-user deposit, never a per-recipient payout, never any individual amount. An auditor can still be granted a view of any single amount on demand via an on-chain ACL grant. Note: these grants are **add-only and irrevocable on-chain** — iExec Nox has no `removeViewer`, so a granted viewer can decrypt that one amount forever; on-chain revocation is future work (see [SECURITY.md](SECURITY.md)).
 
 ### The integrity check — why cheating doesn't pay
 
@@ -89,9 +89,9 @@ All four contracts are **verified on [Sourcify](https://sourcify.dev)** and live
 
 | Contract | Chain | Address |
 |---|---|---|
-| `NoxusBatcher` | ETH Sepolia | [`0xb2F95739f43F1cb3521d3D7057273926a1ce8076`](https://sepolia.etherscan.io/address/0xb2F95739f43F1cb3521d3D7057273926a1ce8076) |
+| `NoxusBatcher` | ETH Sepolia | [`0x5F47142fDfC4cF7B94e347e4a7cD1A8e544453cF`](https://sepolia.etherscan.io/address/0x5F47142fDfC4cF7B94e347e4a7cD1A8e544453cF) |
 | `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C`](https://sepolia.etherscan.io/address/0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C) |
-| `NoxusDistributor` | Arb Sepolia | [`0xe2d5B141C4c1b57E448107f88F97a39ec5ea591D`](https://sepolia.arbiscan.io/address/0xe2d5B141C4c1b57E448107f88F97a39ec5ea591D) |
+| `NoxusDistributor` | Arb Sepolia | [`0xe6fbaf60232f918d83Fe66844a5A3AB31FD5B14D`](https://sepolia.arbiscan.io/address/0xe6fbaf60232f918d83Fe66844a5A3AB31FD5B14D) |
 | `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209`](https://sepolia.arbiscan.io/address/0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209) |
 
 > Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3.
@@ -194,6 +194,10 @@ Faucets: [Sepolia ETH](https://sepoliafaucet.com) · [Arbitrum Sepolia ETH](http
 ## Team
 
 **Aiden** — [X](https://x.com/aiden_7788) · [LinkedIn](https://www.linkedin.com/in/adrian-verdes/)
+
+## Security
+
+An independent audit found no fund-theft path with an honest deployer, confirmed the encrypted integrity check cannot be passed with `Σ ≠ A`, and confirmed no individual amount appears on-chain (exactly 3 reveal sites). Several findings were hardened (immutable peer wiring, keyed claim pre-registration, checks-effects-interactions on the refund path). Accepted testnet limitations remain: an operator-funded fee buffer that must be monitored, a single active epoch per Batcher, **irrevocable auditor grants** (Nox has no `removeViewer`), and trust in the young iExec Nox TEE + KMS + gateway stack. Full findings, severities, and the "not for mainnet without" list are in [SECURITY.md](SECURITY.md). **Testnet-only, unaudited beyond this review — not for mainnet.**
 
 ## License & disclaimer
 

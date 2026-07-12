@@ -15,7 +15,7 @@ import {
 async function main() {
   const c = chainFromArg("eth");
   const { wallet } = connect(c);
-  const me = wallet.address;
+  const me = await wallet.getAddress();
   const usdcAddr = (ADDR.USDC as any)[c.chainId];
   console.log(`\n=== ${c.name} — wrapper deploy+verify (me=${me}) ===`);
 

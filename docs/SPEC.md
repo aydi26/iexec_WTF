@@ -41,7 +41,7 @@ sequenceDiagram
     end
 ```
 
-**Observer's view per epoch:** participant set  · per-user deposit  · aggregate A  (one number, unavoidable) · recipient set  · per-recipient payout  · any individual amount, ever  · auditor view of one amount  on demand via `addViewer` (revocable, on-chain).
+**Observer's view per epoch:** participant set  · per-user deposit  · aggregate A  (one number, unavoidable) · recipient set  · per-recipient payout  · any individual amount, ever  · auditor view of one amount  on demand via `addViewer` (add-only, **irrevocable on-chain** — Nox exposes no `removeViewer`; a granted viewer can decrypt that one amount forever; revocation is future work, see SECURITY.md).
 
 ## 2. Privacy Model
 

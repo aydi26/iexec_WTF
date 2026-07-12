@@ -23,7 +23,6 @@ export default function EpochDashboard() {
   const [viewEpoch, setViewEpoch] = useState(null); // null = follow current
   const [current, setCurrent] = useState(null);
   const [info, setInfo] = useState(null);
-  const [claimsHash, setClaimsHash] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -40,22 +39,12 @@ export default function EpochDashboard() {
       });
       setCurrent(cur);
       const epochId = viewEpoch != null ? viewEpoch : cur;
-      const [i, ch] = await Promise.all([
-        publicClient.readContract({
-          address: BATCHER_ADDRESS,
-          abi: BATCHER_ABI,
-          functionName: "epochInfo",
-          args: [epochId],
-        }),
-        publicClient
-          .readContract({
-            address: BATCHER_ADDRESS,
-            abi: BATCHER_ABI,
-            functionName: "claimsHashOf",
-            args: [epochId],
-          })
-          .catch(() => null),
-      ]);
+      const i = await publicClient.readContract({
+        address: BATCHER_ADDRESS,
+        abi: BATCHER_ABI,
+        functionName: "epochInfo",
+        args: [epochId],
+      });
       // epochInfo -> [state, activeCount, aggregate, refunded, entryCount]
       setInfo({
         state: Number(i[0]),
@@ -65,7 +54,6 @@ export default function EpochDashboard() {
         entryCount: Number(i[4]),
         epochId,
       });
-      setClaimsHash(ch);
       setError(null);
       setLastUpdated(Date.now());
     } catch (err) {
@@ -158,14 +146,6 @@ export default function EpochDashboard() {
                 <span className="k">Refunded</span>
                 <span className="v">{info.refunded ? "yes" : "no"}</span>
               </div>
-              {claimsHash &&
-                claimsHash !==
-                  "0x0000000000000000000000000000000000000000000000000000000000000000" && (
-                  <div className="mf-row">
-                    <span className="k">Claims hash</span>
-                    <span className="v">{shorten(claimsHash, 10, 8)}</span>
-                  </div>
-                )}
             </div>
           ) : null}
 

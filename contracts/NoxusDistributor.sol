@@ -21,10 +21,17 @@ contract NoxusDistributor {
 
     enum State { None, PreRegistering, Received, CheckPending, Distributed, FallbackAttribution, RefundInitiated }
 
+    /// @dev The Batcher's committed claim identifier (mirrors NoxusBatcher.ClaimId),
+    /// decoded from hookData in deposit order.
+    struct ClaimId {
+        address recipient;
+        bytes32 dstHandle;
+    }
+
     struct Claim {
         address recipient;
-        bytes32 dstHandle; // external handle bytes (for claimsHash binding)
-        euint256 ingested; // fromExternal result
+        bytes32 dstHandle; // external handle bytes (matches the committed ClaimId)
+        euint256 ingested; // fromExternal result (the pre-registered handle)
         bool revealed; // PRIVACY FALLBACK — plaintext by design
         uint256 revealedAmount; // PRIVACY FALLBACK — plaintext by design
     }
@@ -36,8 +43,16 @@ contract NoxusDistributor {
         euint256 checkNum; // 1 = integrity ok
         uint64 receivedAt;
         uint64 checkRequestedAt;
-        Claim[] claims;
+        bool hasMissing; // a committed claim had no matching pre-registration
+        Claim[] claims; // resolved, in committed order (built at relayReceive)
     }
+
+    // Pre-registrations, keyed by keccak256(abi.encode(recipient, dstHandle)).
+    // Anyone may pre-register into an epoch, but relayReceive only ever references
+    // the keys named by the source-authenticated committed list — injected extras
+    // are never resolved and cannot brick the epoch (F-1/F-2).
+    mapping(uint256 => mapping(bytes32 => euint256)) private preReg;
+    mapping(uint256 => mapping(bytes32 => bool)) private registered;
 
     IERC20 public immutable usdc;
     IERC7984 public immutable cusdc;
@@ -54,7 +69,7 @@ contract NoxusDistributor {
 
     mapping(uint256 => Epoch) private epochs;
 
-    event PreRegistered(uint256 indexed epochId, address indexed recipient, uint256 index);
+    event PreRegistered(uint256 indexed epochId, address indexed recipient, bytes32 dstHandle);
     event EpochReceived(uint256 indexed epochId, uint256 aggregate);
     event CheckRequested(uint256 indexed epochId);
     event EpochDistributed(uint256 indexed epochId);
@@ -67,8 +82,6 @@ contract NoxusDistributor {
 
     error BadState();
     error NotRecipient();
-    error CountMismatch();
-    error ClaimsHashMismatch();
     error BadOrigin();
     error MaxFeeTooHigh();
     error BufferShort();
@@ -94,43 +107,64 @@ contract NoxusDistributor {
         deployer = msg.sender;
     }
 
+    /// @dev One-shot wiring: first wire wins and is immutable after (the deploy
+    /// script wires once right after deploy).
     function wirePeer(bytes32 _remoteBatcher) external {
-        if (msg.sender != deployer) revert AlreadyWired(); // deployer-only config; re-settable
+        if (remoteBatcher != bytes32(0)) revert AlreadyWired();
         remoteBatcher = _remoteBatcher;
         emit PeerWired(_remoteBatcher);
     }
 
-    /// @notice Depositor pre-registers their confidential destination claim.
-    /// MUST be the depositor's own tx: Nox binds the input to msg.sender (owner)
-    /// and this contract (app). dstHandle/proof are created with app=this,
-    /// owner=msg.sender on THIS chain.
+    /// @notice Depositor pre-registers their confidential destination claim, keyed
+    /// by keccak256(recipient, dstHandle). MUST be the recipient's own tx: Nox binds
+    /// the input to msg.sender (owner) and this contract (app), and we additionally
+    /// require msg.sender == recipient (F-7). dstHandle/proof are created with
+    /// app=this, owner=msg.sender on THIS chain.
     function preRegister(uint256 epochId, address recipient, externalEuint256 dstHandle, bytes calldata proof)
         external
     {
+        if (msg.sender != recipient) revert NotRecipient();
         Epoch storage e = epochs[epochId];
         if (e.state != State.None && e.state != State.PreRegistering) revert BadState();
+        bytes32 key = keccak256(abi.encode(recipient, externalEuint256.unwrap(dstHandle)));
+        if (registered[epochId][key]) revert BadState();
         e.state = State.PreRegistering;
         euint256 ingested = Nox.fromExternal(dstHandle, proof);
         Nox.allowThis(ingested);
         Nox.allow(ingested, recipient);
-        e.claims.push(Claim(recipient, externalEuint256.unwrap(dstHandle), ingested, false, 0));
-        emit PreRegistered(epochId, recipient, e.claims.length - 1);
+        preReg[epochId][key] = ingested;
+        registered[epochId][key] = true;
+        emit PreRegistered(epochId, recipient, externalEuint256.unwrap(dstHandle));
     }
 
-    /// @notice Relay the CCTP message: mint A here, then bind it to the pre-registered
-    /// claim set via (count, claimsHash). destinationCaller = this contract (D-011).
+    /// @notice Relay the CCTP message: mint A here, then resolve exactly the
+    /// source-authenticated committed claim list (in order) against our
+    /// pre-registrations. destinationCaller = this contract (D-011). A committed
+    /// claim with no matching pre-registration flags hasMissing (the epoch then
+    /// cannot distribute — see declareFallback); injected extras (keys not on the
+    /// committed list) are simply never referenced (F-1/F-2).
     function relayReceive(bytes calldata message, bytes calldata attestation) external {
+        require(message.length >= 376, "short msg"); // guard fixed-offset field reads
         require(transmitter.receiveMessage(message, attestation), "receiveMessage failed");
         if (message.sourceDomain() != srcDomain) revert BadOrigin();
         if (message.bodyMessageSender() != remoteBatcher) revert BadOrigin();
         if (message.bodyMintRecipient() != bytes32(uint256(uint160(address(this))))) revert BadOrigin();
 
-        (uint256 epochId, uint256 count, bytes32 claimsHash) =
-            abi.decode(message.hookData(), (uint256, uint256, bytes32));
+        (uint256 epochId, ClaimId[] memory committed) = abi.decode(message.hookData(), (uint256, ClaimId[]));
         Epoch storage e = epochs[epochId];
         if (e.state != State.PreRegistering) revert BadState();
-        if (e.claims.length != count) revert CountMismatch();
-        if (_claimsHash(e) != claimsHash) revert ClaimsHashMismatch();
+
+        uint256 n = committed.length;
+        for (uint256 i; i < n; ++i) {
+            bytes32 key = keccak256(abi.encode(committed[i].recipient, committed[i].dstHandle));
+            if (registered[epochId][key]) {
+                e.claims.push(
+                    Claim(committed[i].recipient, committed[i].dstHandle, preReg[epochId][key], false, 0)
+                );
+            } else {
+                e.hasMissing = true;
+            }
+        }
 
         e.aggregate = message.amount();
         e.feeExecuted = message.feeExecuted();
@@ -139,11 +173,23 @@ contract NoxusDistributor {
         emit EpochReceived(epochId, e.aggregate);
     }
 
+    /// @notice A committed pre-registration went missing (a plaintext fact needing
+    /// no reveal): allow anyone to move the epoch straight to fallback so source
+    /// depositors get refunded. Callable while Received && hasMissing.
+    function declareFallback(uint256 epochId) external {
+        Epoch storage e = epochs[epochId];
+        if (e.state != State.Received || !e.hasMissing) revert BadState();
+        _enterFallback(epochId, e);
+    }
+
     /// @notice Integrity check: reveal whether Σ pre-registered claims == A.
     /// Overflow-safe fold (safeAdd + okCount) so wrap-to-A collusion cannot pass.
     function checkEpoch(uint256 epochId) external {
         Epoch storage e = epochs[epochId];
         if (e.state != State.Received) revert BadState();
+        // A hasMissing / empty-claim epoch cannot distribute — it must go to
+        // fallback via declareFallback (or forceFallback on timeout), never here.
+        if (e.hasMissing || e.claims.length == 0) revert BadState();
         uint256 n = e.claims.length;
 
         euint256 total = Nox.toEuint256(0);
@@ -172,6 +218,10 @@ contract NoxusDistributor {
         if (e.state != State.CheckPending) revert BadState();
         uint256 v = Nox.publicDecrypt(e.checkNum, proof);
         if (v == 1) {
+            // Fee-buffer exhaustion is observable (bufferShortfall) and non-permanent:
+            // if BufferShort reverts, anyone can transfer USDC to top the contract up
+            // and retry; and forceFallback rescues after fallbackTimeout (reachable
+            // from CheckPending), so a short buffer never strands the epoch (F-4).
             if (usdc.balanceOf(address(this)) < e.aggregate) revert BufferShort();
             usdc.approve(address(wrapper), e.aggregate);
             wrapper.wrap(address(this), e.aggregate);
@@ -220,6 +270,7 @@ contract NoxusDistributor {
     /// PRIVACY FALLBACK — plaintext by design. Informational only; gates nothing.
     function resolveClaim(uint256 epochId, uint256 index, bytes calldata proof) external {
         Epoch storage e = epochs[epochId];
+        if (e.state != State.FallbackAttribution && e.state != State.RefundInitiated) revert BadState();
         Claim storage c = e.claims[index];
         uint256 v = Nox.publicDecrypt(c.ingested, proof);
         c.revealed = true;
@@ -245,10 +296,10 @@ contract NoxusDistributor {
     function epochInfo(uint256 epochId)
         external
         view
-        returns (State state, uint256 aggregate, uint256 feeExecuted, uint256 claimCount)
+        returns (State state, uint256 aggregate, uint256 feeExecuted, uint256 claimCount, bool hasMissing)
     {
         Epoch storage e = epochs[epochId];
-        return (e.state, e.aggregate, e.feeExecuted, e.claims.length);
+        return (e.state, e.aggregate, e.feeExecuted, e.claims.length, e.hasMissing);
     }
 
     function checkHandle(uint256 epochId) external view returns (euint256) {
@@ -264,16 +315,12 @@ contract NoxusDistributor {
         return (c.recipient, c.dstHandle, c.ingested, c.revealed, c.revealedAmount);
     }
 
-    function claimsHashOf(uint256 epochId) external view returns (bytes32) {
-        return _claimsHash(epochs[epochId]);
-    }
-
-    function _claimsHash(Epoch storage e) internal view returns (bytes32) {
-        bytes memory buf;
-        uint256 n = e.claims.length;
-        for (uint256 i; i < n; ++i) {
-            buf = abi.encodePacked(buf, e.claims[i].recipient, e.claims[i].dstHandle);
-        }
-        return keccak256(buf);
+    /// @notice Observable fee-buffer gap (F-4): how much USDC the contract is short
+    /// of the aggregate. If > 0, finalizeEpoch reverts BufferShort — anyone may
+    /// transfer USDC here to top up, or forceFallback rescues after the timeout.
+    function bufferShortfall(uint256 epochId) external view returns (uint256) {
+        uint256 aggregate = epochs[epochId].aggregate;
+        uint256 bal = usdc.balanceOf(address(this));
+        return aggregate > bal ? aggregate - bal : 0;
     }
 }

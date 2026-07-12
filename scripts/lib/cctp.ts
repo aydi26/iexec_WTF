@@ -1,5 +1,5 @@
 /** CCTP V2 helpers: fast burn, Iris attestation polling, receiveMessage. */
-import { Contract, Wallet, zeroPadValue, getAddress } from "ethers";
+import { Contract, NonceManager, zeroPadValue, getAddress } from "ethers";
 import { ADDR, sleep } from "./common.js";
 
 const IRIS = "https://iris-api-sandbox.circle.com";
@@ -32,12 +32,13 @@ export async function computeMaxFee(amount: bigint, srcDomain: number, dstDomain
 /** Burn USDC on the source chain (fast). destinationCaller=bytes32(0) => anyone relays;
  *  pass a specific caller to restrict receiveMessage. Returns the burn tx hash. */
 export async function fastBurn(
-  wallet: Wallet,
+  wallet: NonceManager,
   usdcAddr: string,
   opts: { amount: bigint; dstDomain: number; mintRecipient: string; destinationCaller: string; hookData: string; maxFee: bigint }
 ): Promise<string> {
   const usdc = new Contract(usdcAddr, ERC20_ABI, wallet);
-  if ((await usdc.allowance(wallet.address, ADDR.TOKEN_MESSENGER_V2)) < opts.amount) {
+  const me = await wallet.getAddress();
+  if ((await usdc.allowance(me, ADDR.TOKEN_MESSENGER_V2)) < opts.amount) {
     await (await usdc.approve(ADDR.TOKEN_MESSENGER_V2, opts.amount)).wait();
   }
   const tm = new Contract(ADDR.TOKEN_MESSENGER_V2, TOKEN_MESSENGER_ABI, wallet);
@@ -73,7 +74,7 @@ export async function fetchAttestation(srcDomain: number, burnTxHash: string, ti
 }
 
 /** Call MessageTransmitterV2.receiveMessage directly (for non-Noxus mints, e.g. seeding). */
-export async function receiveMessage(wallet: Wallet, message: string, attestation: string): Promise<string> {
+export async function receiveMessage(wallet: NonceManager, message: string, attestation: string): Promise<string> {
   const tr = new Contract(ADDR.MESSAGE_TRANSMITTER_V2, TRANSMITTER_ABI, wallet);
   const tx = await tr.receiveMessage(message, attestation);
   const rc = await tx.wait();

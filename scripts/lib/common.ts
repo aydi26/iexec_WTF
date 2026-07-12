@@ -1,5 +1,5 @@
 /** Shared helpers: providers, wallet, Nox handle client, artifact + deployment IO. */
-import { JsonRpcProvider, Wallet, ContractFactory, Contract, Interface } from "ethers";
+import { JsonRpcProvider, Wallet, NonceManager, ContractFactory, Contract, Interface } from "ethers";
 import { createEthersHandleClient } from "@iexec-nox/handle";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { config as dotenv } from "dotenv";
@@ -34,12 +34,16 @@ export function chainFromArg(def: ChainKey = "eth"): (typeof CHAINS)[ChainKey] {
 
 export function connect(c: (typeof CHAINS)[ChainKey]) {
   const provider = new JsonRpcProvider(c.rpc, c.chainId, { staticNetwork: true });
-  const wallet = new Wallet(process.env.DEPLOYER_PRIVATE_KEY!, provider);
+  // Wrap in NonceManager so nonces are tracked locally — avoids the recurring
+  // "nonce has already been used" from stale public-RPC pending counts. Note:
+  // NonceManager is a Signer, not a Wallet — it has NO synchronous `.address`;
+  // resolve the address once via `await wallet.getAddress()` (see scripts).
+  const wallet = new NonceManager(new Wallet(process.env.DEPLOYER_PRIVATE_KEY!, provider));
   return { provider, wallet };
 }
 
-export async function handleClient(wallet: Wallet) {
-  return createEthersHandleClient(wallet);
+export async function handleClient(wallet: NonceManager) {
+  return createEthersHandleClient(wallet as any);
 }
 
 export function artifact(name: string) {
@@ -52,7 +56,7 @@ export function artifact(name: string) {
   throw new Error(`artifact not found for ${name}`);
 }
 
-export async function deploy(name: string, wallet: Wallet, args: unknown[] = []) {
+export async function deploy(name: string, wallet: NonceManager, args: unknown[] = []) {
   const a = artifact(name);
   const f = new ContractFactory(a.abi, a.bytecode, wallet);
   const c = await f.deploy(...args);

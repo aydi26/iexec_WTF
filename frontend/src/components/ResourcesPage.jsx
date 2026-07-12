@@ -22,14 +22,15 @@ const docsTree = [
     category: "Protocol",
     content: {
       title: "Getting Started",
-      body: "{Noxus} is an anonymous deposit protocol for Hyperliquid Testnet, powered by iExec TEE (Trusted Execution Environment) on Arbitrum Sepolia. It allows users to deposit USDC2 into a vault on-chain and have it bridged anonymously to any address on Hyperliquid Testnet, without anyone being able to link the initial deposit to the final destination.",
+      body: "Noxus is a confidential cross-chain USDC settlement layer over Circle CCTP V2, using iExec Nox (encrypted ERC-7984 handles + TEE) as the privacy layer. Depositors put in encrypted amounts on Ethereum Sepolia; the amounts are batched into an encrypted sum and only the aggregate is ever public; one CCTP transfer bridges the whole batch, and each recipient is confidentially credited on Arbitrum Sepolia. Individual amounts never touch the blockchain. Positioning: confidentiality, not anonymity — participants are visible, amounts are not.",
       subsections: [
         {
           title: "Prerequisites",
           items: [
-            "A wallet with ETH on Arbitrum Sepolia",
-            "USDC2 tokens on Arbitrum Sepolia (withdraw from Hyperliquid Testnet)",
-            "A Hyperliquid Testnet destination address",
+            "A wallet (e.g. MetaMask) with ETH on Ethereum Sepolia for gas",
+            "Testnet USDC on Ethereum Sepolia (get it from faucet.circle.com)",
+            "The app will prompt you to switch to Ethereum Sepolia for source-side actions",
+            "For the destination leg you also need a little ETH on Arbitrum Sepolia",
           ],
         },
       ],
@@ -42,67 +43,79 @@ const docsTree = [
     children: [
       {
         id: "deposit",
-        label: "1. Deposit USDC",
+        label: "1. Confidential Deposit",
         content: {
-          title: "Deposit USDC2",
-          body: "Approve and deposit USDC2 into the PrivacyVault smart contract on Arbitrum Sepolia.",
+          title: "1. Confidential Deposit",
+          body: "On Ethereum Sepolia, you wrap USDC into confidential cUSDC (ERC-7984), then deposit an amount that is encrypted client-side before it ever touches the chain. On-chain, observers see that you deposited — but never how much.",
+          subsections: [
+            {
+              title: "What happens",
+              items: [
+                "approve USDC, then wrap it into cUSDC (confidential ERC-7984 token)",
+                "setOperator authorizes the Batcher to pull your encrypted balance",
+                "Your amount is encrypted in the browser via the Nox handle SDK",
+                "deposit() adds your encrypted amount to the epoch's encrypted sum",
+                "The contract itself never learns your individual amount",
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: "batch-settle",
+        label: "2. Batch & Settle",
+        content: {
+          title: "2. Batch & Settle",
+          body: "Deposits accumulate into a single encrypted sum for the epoch. When the epoch closes, only the aggregate A is revealed — one number for the whole batch — and that exact amount is bridged with a single CCTP V2 burn.",
           subsections: [
             {
               title: "Details",
               items: [
-                "Minimum deposit: 5 USDC2",
-                "Requires a prior ERC20 approve() transaction",
-                "USDC2 uses 6 decimals (5 USDC2 = 5,000,000 wei)",
-                "Deposits are tracked on-chain for emergency withdrawal",
+                "closeEpoch() reveals only the encrypted sum (requires >= minDepositors, default 3)",
+                "settleEpoch() verifies A on-chain, unwraps exactly A, and burns via CCTP V2",
+                "A (the aggregate) is the only public number — it is unavoidable, since CCTP burns a plaintext amount",
+                "The burn carries the destination claim list in the CCTP hookData",
               ],
             },
           ],
         },
       },
       {
-        id: "submit-intent",
-        label: "2. Submit Intent",
+        id: "bridge-check",
+        label: "3. Bridge & Integrity Check",
         content: {
-          title: "Submit Encrypted Intent",
-          body: "Your Hyperliquid destination address is encrypted and submitted to iExec's TEE (SGX enclave). Nobody can read it outside the enclave.",
+          title: "3. Bridge & Integrity Check",
+          body: "CCTP V2 Fast Transfer mints A on Arbitrum Sepolia (~8-20s). Before any money moves, an on-chain, TEE-verified integrity check confirms that the sum of the (still-encrypted) destination claims equals the bridged aggregate A. This is what makes cheating detectable.",
           subsections: [
             {
-              title: "Execution Modes",
+              title: "The check",
               items: [
-                "iExec TEE: Production mode, intent encrypted via iExec SDK",
-                "Fallback Server: Demo/testing mode when iExec workerpool is unavailable",
+                "Each depositor pre-registers their confidential destination claim on Arbitrum (own tx)",
+                "relayReceive mints A and binds it to the source-committed claim set",
+                "checkEpoch computes, in the TEE, whether Sum(claims) == A and reveals only a boolean",
+                "The comparison is overflow-safe: a cheater cannot make claims wrap around to A",
               ],
             },
           ],
         },
       },
       {
-        id: "tee-processing",
-        label: "3. TEE Processing",
+        id: "distribute",
+        label: "4. Distribute or Refund",
         content: {
-          title: "TEE Processing",
-          body: "Inside the TEE, a fresh wallet is generated. The vault redistributes your USDC2 to this fresh wallet, which then bridges to Hyperliquid and forwards to your destination.",
+          title: "4. Confidential Distribution (or Fallback)",
+          body: "If the check passes, each recipient is confidentially credited their share — amounts stay hidden. If a depositor inflated their claim (Sum != A), the check fails, the epoch flags itself, the inconsistency is exposed by opt-in reveal, and the aggregate is bridged back so every depositor is refunded their attested source amount.",
           subsections: [
             {
-              title: "Execution Steps",
+              title: "Honest vs cheating",
               items: [
-                "Generate a fresh random wallet (ethers.Wallet.createRandom)",
-                "Call redistribute() on the vault to send USDC2 to the fresh wallet",
-                "Fund the fresh wallet with ~0.001 ETH for gas",
-                "Fresh wallet bridges USDC2 to Hyperliquid via the HL bridge contract",
-                "Poll Hyperliquid API until USDC is credited (~60 seconds)",
-                "Sign EIP-712 usdSend to transfer from fresh wallet to your HL destination",
+                "check == true: confidential cUSDC credit per recipient, amounts never revealed",
+                "check == false: opt-in attribution reveal exposes Sum != A, cheater is identified",
+                "Refund-to-source: A is bridged back and each depositor re-credited their attested amount",
+                "The cheater cannot claim more than they deposited; cheating is detectable and unprofitable",
               ],
             },
           ],
-        },
-      },
-      {
-        id: "receive",
-        label: "4. Receive on HL",
-        content: {
-          title: "Receive on Hyperliquid Testnet",
-          body: "The fresh wallet transfers USDC to your destination address on Hyperliquid Testnet via EIP-712 signed usdSend. No link to your original deposit exists anywhere on-chain.",
         },
       },
     ],
@@ -113,43 +126,103 @@ const docsTree = [
     category: "Technical",
     content: {
       title: "Architecture",
-      body: "The protocol operates across three domains: Arbitrum Sepolia (user deposits), iExec TEE (SGX enclave for private processing), and Hyperliquid Testnet (final destination). The TEE ensures that the mapping between deposit and destination is never exposed.",
+      body: "Noxus spans two chains and calls two unmodified official protocols. The source leg batches confidential deposits on Ethereum Sepolia; the destination leg verifies and distributes on Arbitrum Sepolia. Circle CCTP V2 does the actual bridging; iExec Nox provides the encrypted handles, the TEE compute, and the on-chain ACL. Neither protocol is modified — Noxus only calls them.",
       table: [
-        { label: "Smart Contract", value: "PrivacyVault.sol (Solidity 0.8.20, OpenZeppelin 5.x)" },
-        { label: "TEE Runtime", value: "Node.js + ethers.js v6, running in iExec SGX/TDX enclave" },
-        { label: "Frontend", value: "React 19, Vite, wagmi, viem, @tanstack/react-query" },
-        { label: "Bridge", value: "Hyperliquid Testnet bridge + EIP-712 usdSend" },
+        { label: "Source leg", value: "NoxusBatcher.sol on Ethereum Sepolia" },
+        { label: "Destination leg", value: "NoxusDistributor.sol on Arbitrum Sepolia" },
+        { label: "Confidential token", value: "NoxusCUSDC (iExec ERC20ToERC7984Wrapper) on both chains" },
+        { label: "Bridge", value: "Circle CCTP V2 Fast Transfer + Hooks (unmodified)" },
+        { label: "Privacy layer", value: "iExec Nox: ERC-7984 handles, TEE compute, threshold-KMS reveals" },
+        { label: "Frontend", value: "React 19, Vite, wagmi, viem, @iexec-nox/handle" },
       ],
     },
   },
   {
-    id: "smart-contract",
-    label: "Smart Contract",
+    id: "contracts",
+    label: "Contracts",
     category: "Technical",
     content: {
-      title: "Smart Contract",
-      body: "The PrivacyVault contract has three main functions:",
+      title: "Contracts",
+      body: "Three authored contracts, plus the unmodified CCTP V2 and NoxCompute deployments. Every function is permissionless (guarded by state + on-chain proof verification, not caller identity); the keeper is just whoever bothers to advance the epoch.",
       table: [
-        { label: "deposit(amount)", value: "User deposits USDC2 (min 5). Requires prior ERC20 approve()." },
-        { label: "redistribute(recipients, amounts)", value: "TEE-only function (REDISTRIBUTOR_ROLE). Sends USDC2 from vault to fresh wallets." },
-        { label: "emergencyWithdraw()", value: "Safety net allowing users to recover deposited USDC2 if the TEE is unavailable." },
+        { label: "NoxusBatcher", value: "deposit / withdrawDeposit / closeEpoch / settleEpoch / relayRefund / grantAuditor" },
+        { label: "NoxusDistributor", value: "preRegister / relayReceive / checkEpoch / finalizeEpoch / fallback + refund" },
+        { label: "NoxusCUSDC", value: "Confidential USDC wrapper: wrap / unwrap / confidentialTransfer" },
+        { label: "Integrity", value: "3 reveal sites only; no plaintext amount in events; no branching on encrypted data" },
       ],
     },
   },
   {
-    id: "network-config",
-    label: "Network Configuration",
+    id: "privacy-model",
+    label: "Privacy Model",
+    category: "Technical",
+    content: {
+      title: "Privacy Model",
+      body: "Confidentiality, not anonymity. What is hidden is amounts; what is visible is participation.",
+      subsections: [
+        {
+          title: "Guaranteed by construction",
+          items: [
+            "Individual amounts are never emitted, stored, or derivable on-chain",
+            "The link between source depositor and destination recipient is broken (no amount on either leg)",
+            "Any single amount can be disclosed to an auditor on demand, via an on-chain ACL grant",
+          ],
+        },
+        {
+          title: "Documented, not hidden",
+          items: [
+            "The aggregate A is public (it is the CCTP burn amount) — privacy needs >= 2 depositors/epoch",
+            "Participant sets and timing are visible — this is confidentiality, not a mixer",
+            "Auditor grants are add-only on-chain (iExec Nox has no removeViewer) — see Security",
+            "Confidentiality rests on the iExec Nox TEE + threshold-KMS + gateway trust model",
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: "deployments",
+    label: "Deployments",
     category: "Reference",
     content: {
-      title: "Network Configuration",
+      title: "Live Deployments (Sourcify-verified)",
       table: [
-        { label: "Chain", value: "Arbitrum Sepolia (Chain ID: 421614)" },
-        { label: "PrivacyVault", value: "0xa285D070351aEAF4865923e4B88C51E63283aD84" },
-        { label: "USDC2 Contract", value: "0x1baAbB04529D43a73232B713C0FE471f7c7334d5 (6 decimals)" },
-        { label: "HL Bridge", value: "0x08cfc1B6b2dCF36A1480b99353A354AA8AC56f89" },
-        { label: "HL API", value: "api.hyperliquid-testnet.xyz" },
-        { label: "USDC2 Source", value: "Withdraw from Hyperliquid Testnet (drip faucet → withdraw)" },
-        { label: "ETH Faucet", value: "faucets.chain.link/arbitrum-sepolia" },
+        { label: "Ethereum Sepolia", value: "Chain ID 11155111 · CCTP domain 0" },
+        { label: "NoxusBatcher (ETH)", value: "0xb2F95739f43F1cb3521d3D7057273926a1ce8076" },
+        { label: "NoxusCUSDC (ETH)", value: "0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C" },
+        { label: "Arbitrum Sepolia", value: "Chain ID 421614 · CCTP domain 3" },
+        { label: "NoxusDistributor (Arb)", value: "0xe2d5B141C4c1b57E448107f88F97a39ec5ea591D" },
+        { label: "NoxusCUSDC (Arb)", value: "0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209" },
+        { label: "CCTP TokenMessengerV2", value: "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA (both chains)" },
+        { label: "CCTP MessageTransmitterV2", value: "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275 (both chains)" },
+      ],
+    },
+  },
+  {
+    id: "security",
+    label: "Security",
+    category: "Reference",
+    content: {
+      title: "Security & Trust",
+      body: "Testnet-only, unaudited, hackathon software. An independent review found no way to steal funds with an honest deployer, and confirmed the encrypted integrity check cannot be passed with Sum != A.",
+      subsections: [
+        {
+          title: "Sound by design",
+          items: [
+            "No fund theft possible given an honest deployer",
+            "The integrity check cannot be passed with Sum != A (overflow-safe encrypted comparison)",
+            "Individual amounts never appear on-chain; exactly 3 controlled reveal sites",
+          ],
+        },
+        {
+          title: "Accepted limitations (v1)",
+          items: [
+            "Fee buffers are an operational subsidy that must be monitored and topped up",
+            "A single active epoch per Batcher; a stuck epoch has a timeout-based fallback rescue",
+            "Auditor grants are irrevocable on-chain (no removeViewer in Nox) — revocation is future work",
+            "Not for mainnet without a professional audit and anti-griefing economics",
+          ],
+        },
       ],
     },
   },
@@ -161,13 +234,13 @@ const docsTree = [
       title: "Important Notes",
       subsections: [
         {
-          title: "Warnings",
+          title: "Good to know",
           items: [
-            "Minimum deposit on Hyperliquid Testnet is 5 USDC2. Below this, funds are lost forever.",
-            "USDC2 uses 6 decimals, not 18. 5 USDC2 = 5,000,000 in raw units.",
-            "The Hyperliquid bridge takes approximately 60 seconds to process.",
-            "The EIP-712 signatureChainId must be 0x66eee (421614 hex) or usdSend fails silently.",
-            "Fresh wallets need ~0.001 ETH for gas to call the bridge contract.",
+            "USDC uses 6 decimals — 1 USDC = 1,000,000 raw units",
+            "closeEpoch requires at least minDepositors (default 3) to preserve k-anonymity",
+            "The confidential source flow is driveable from this UI; the cross-chain destination leg (relay, check, distribute) is driven by the keeper scripts",
+            "CCTP Fast Transfer settles in ~8-20 seconds; the reveal round-trip via the Nox KMS is a few seconds",
+            "Everything runs on real testnets with real USDC, real Iris attestations, and real Nox proofs — no mock data",
           ],
         },
       ],
@@ -338,7 +411,7 @@ export default function ResourcesPage() {
 
         <div className="docs-sidebar-cta">
           <Link to="/" className="docs-sidebar-cta-btn">
-            Start Bridging
+            Open the App
           </Link>
         </div>
       </aside>
