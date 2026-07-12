@@ -89,10 +89,10 @@ All four contracts are **verified on [Sourcify](https://sourcify.dev)** and live
 
 | Contract | Chain | Address |
 |---|---|---|
-| `NoxusBatcher` | ETH Sepolia | [`0x92467950c381f9CfCd4D213Bf2D67d464C5266c4`](https://sepolia.etherscan.io/address/0x92467950c381f9CfCd4D213Bf2D67d464C5266c4) |
-| `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0xe195B0396B973C548178Eeb64DC20b9dd9B8406a`](https://sepolia.etherscan.io/address/0xe195B0396B973C548178Eeb64DC20b9dd9B8406a) |
-| `NoxusDistributor` | Arb Sepolia | [`0xb36F257a0535fF666fFa61af553898a67dF6d863`](https://sepolia.arbiscan.io/address/0xb36F257a0535fF666fFa61af553898a67dF6d863) |
-| `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0x8ECc0b570536Ff5F9710E04880A0f23455d608d5`](https://sepolia.arbiscan.io/address/0x8ECc0b570536Ff5F9710E04880A0f23455d608d5) |
+| `NoxusBatcher` | ETH Sepolia | [`0xb2F95739f43F1cb3521d3D7057273926a1ce8076`](https://sepolia.etherscan.io/address/0xb2F95739f43F1cb3521d3D7057273926a1ce8076) |
+| `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C`](https://sepolia.etherscan.io/address/0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C) |
+| `NoxusDistributor` | Arb Sepolia | [`0xe2d5B141C4c1b57E448107f88F97a39ec5ea591D`](https://sepolia.arbiscan.io/address/0xe2d5B141C4c1b57E448107f88F97a39ec5ea591D) |
+| `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209`](https://sepolia.arbiscan.io/address/0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209) |
 
 > Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3.
 
