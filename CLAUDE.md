@@ -1,5 +1,5 @@
 # CLAUDE.md
-Single source of truth: README.md. Before ANY edit, read §7 (constraints),
+Single source of truth: docs/SPEC.md (internal spec + worklog; the root README.md is the public overview). Before ANY edit, read §7 (constraints),
 §12 (guardrails G1–G10, session protocol, build order), §13 (STATE, decisions, worklog).
 Follow the §12 session protocol: plan first, small verified steps, MANDATORY
 append-only worklog entry + STATE update at session end. Never contradict a
