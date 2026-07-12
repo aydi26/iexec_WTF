@@ -1,0 +1,36 @@
+{
+  "name": "manifold",
+  "version": "1.0.0",
+  "description": "Confidential cross-chain USDC settlement over Circle CCTP V2 with iExec Nox",
+  "scripts": {
+    "probe": "tsx scripts/probe_infra.ts",
+    "bench": "tsx scripts/bench_nox_latency.ts",
+    "test": "hardhat test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.12.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "@iexec-nox/handle": "0.1.0-beta.13",
+    "@iexec-nox/nox-confidential-contracts": "0.2.2",
+    "@iexec-nox/nox-protocol-contracts": "0.2.4",
+    "dotenv": "^17.4.2",
+    "ethers": "^6.17.0"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^7.0.0",
+    "@types/node": "^26.1.1",
+    "hardhat": "^3.9.1",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2"
+  },
+  "private": true
+}
