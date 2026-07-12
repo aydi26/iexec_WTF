@@ -16,10 +16,10 @@ import { sepolia, arbitrumSepolia } from "viem/chains";
 import ManifoldBatcherAbi from "../abis/ManifoldBatcher.json";
 import ManifoldCUSDCAbi from "../abis/ManifoldCUSDC.json";
 // TODO(contracts): ManifoldDistributor ABI does not exist yet. This is a
-// clearly-marked placeholder. Replace src/abis/ManifoldDistributor.placeholder.json
+// clearly-marked placeholder. Replace s../abis/ManifoldDistributor.json
 // with the real compiled ABI (artifacts/contracts/ManifoldDistributor.sol/…json)
 // once the destination-leg contract is deployed, and re-point this import.
-import ManifoldDistributorAbi from "../abis/ManifoldDistributor.placeholder.json";
+import ManifoldDistributorAbi from "../abis/ManifoldDistributor.json";
 
 // Deployment manifests copied from repo root /deployments.
 import sepoliaDeployment from "../deployments/11155111.json";
@@ -139,3 +139,18 @@ export const EPOCH_STATE = {
   2: "Settled",
   3: "Refunded",
 };
+
+// ---------------------------------------------------------------------------
+// Compatibility shims for the ported HyperSecret BridgeWidget imports. The
+// classic-iExec/Hyperliquid path is disabled (aliased to a stub in vite.config);
+// these map the widget's expected names onto Manifold's source-leg contracts so
+// the UI renders. Full Manifold deposit wiring lives in the deposit handler.
+// ---------------------------------------------------------------------------
+export const VAULT_ADDRESS = BATCHER_ADDRESS;
+export const VAULT_ABI = BATCHER_ABI;
+export const IAPP_ADDRESS = "";
+export const IEXEC_HUB_ADDRESS = "";
+export const FALLBACK_API = "";
+export { USDC } from "./_usdc.js";
+
+export { USDC_ADDRESS } from "./_usdc.js";

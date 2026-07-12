@@ -22,7 +22,7 @@ const docsTree = [
     category: "Protocol",
     content: {
       title: "Getting Started",
-      body: "{HyperSecret} is an anonymous deposit protocol for Hyperliquid Testnet, powered by iExec TEE (Trusted Execution Environment) on Arbitrum Sepolia. It allows users to deposit USDC2 into a vault on-chain and have it bridged anonymously to any address on Hyperliquid Testnet, without anyone being able to link the initial deposit to the final destination.",
+      body: "{Manifold} is an anonymous deposit protocol for Hyperliquid Testnet, powered by iExec TEE (Trusted Execution Environment) on Arbitrum Sepolia. It allows users to deposit USDC2 into a vault on-chain and have it bridged anonymously to any address on Hyperliquid Testnet, without anyone being able to link the initial deposit to the final destination.",
       subsections: [
         {
           title: "Prerequisites",

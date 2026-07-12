@@ -787,7 +787,7 @@ export default function BridgeWidget() {
                     <div className="bridge-route-path-header">
                       <div className="bridge-route-path-left">
                         <span className="bridge-route-path-dot" />
-                        <span className="bridge-route-path-name">{`{HyperSecret}`}</span>
+                        <span className="bridge-route-path-name">{`{Manifold}`}</span>
                       </div>
                       <span className="bridge-route-path-tag">Best Route</span>
                     </div>

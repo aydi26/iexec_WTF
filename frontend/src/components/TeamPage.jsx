@@ -11,14 +11,7 @@ export default function TeamPage() {
         <h1 className="team-title">MEET THE TEAM</h1>
       </div>
 
-      <div className="team-grid">
-        <ProfileCard
-          avatarUrl={pfpLeft}
-          name="skar88"
-          twitter="https://x.com/0xhaizeka"
-          linkedin="https://www.linkedin.com/in/albanderouin/"
-          telegram="https://t.me/haizeka88"
-        />
+      <div className="team-grid team-grid--single">
         <ProfileCard
           avatarUrl={pfpRight}
           name="Aiden"

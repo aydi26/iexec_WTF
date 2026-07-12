@@ -44,7 +44,7 @@ function AppContent() {
               <path d="M102.821 72.3674C97.323 81.0338 84.6769 81.0338 79.1785 72.3674L61.3395 44.2501C55.4258 34.9292 62.1223 22.75 73.161 22.75L108.839 22.75C119.878 22.75 126.574 34.9292 120.66 44.2502L102.821 72.3674Z" fill="currentColor"/>
               <path d="M109.633 102.821C100.966 97.323 100.966 84.6769 109.633 79.1785L137.75 61.3395C147.071 55.4258 159.25 62.1223 159.25 73.161V108.839C159.25 119.878 147.071 126.574 137.75 120.66L109.633 102.821Z" fill="currentColor"/>
             </svg>
-            <span className="app-logo-text"><span className="app-logo-brace">{"{"}</span>HyperSecret<span className="app-logo-brace">{"}"}</span></span>
+            <span className="app-logo-text"><span className="app-logo-brace">{"{"}</span>Manifold<span className="app-logo-brace">{"}"}</span></span>
           </NavLink>
 
           <div className="app-header-right">
@@ -91,7 +91,7 @@ function AppContent() {
             </a>
           </div>
           <span className="app-footer-text">
-            Anonymous transfers via iExec TEE
+            Confidential cross-chain USDC settlement — amounts never touch the chain
           </span>
         </footer>
       </div>
