@@ -1,5 +1,5 @@
 // ============================================================================
-// Noxus container — the "/" route. Reuses the HyperSecret shell's card/glass
+// Noxus container — the "/" route. Reuses the Noxus shell's card/glass
 // styling (mf-shell mirrors the bridge-widget card language) and hosts the five
 // Noxus views behind a tab bar.
 // ============================================================================
