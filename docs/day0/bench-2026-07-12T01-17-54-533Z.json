@@ -1,0 +1,68 @@
+{
+  "ranAt": "2026-07-12T01:17:54.534Z",
+  "reports": [
+    {
+      "chain": "arbSepolia",
+      "chainId": 421614,
+      "N": 2,
+      "proofBytes": 137,
+      "harness": "0x283fc8c036327E87b5De2410E695F92BE2F5A139",
+      "metrics": {
+        "encrypt": {
+          "median": 882,
+          "p90": 882,
+          "n": 2,
+          "raw": [
+            882,
+            1461
+          ]
+        },
+        "ingestTx": {
+          "median": 465,
+          "p90": 465,
+          "n": 2,
+          "raw": [
+            611,
+            465
+          ]
+        },
+        "opTx": {
+          "median": 406,
+          "p90": 406,
+          "n": 2,
+          "raw": [
+            406,
+            740
+          ]
+        },
+        "clientDecrypt": {
+          "median": 597,
+          "p90": 597,
+          "n": 2,
+          "raw": [
+            1722,
+            597
+          ]
+        },
+        "revealRTT": {
+          "median": 584,
+          "p90": 584,
+          "n": 2,
+          "raw": [
+            2764,
+            584
+          ]
+        },
+        "prodRTT": {
+          "median": 1709,
+          "p90": 1709,
+          "n": 2,
+          "raw": [
+            4297,
+            1709
+          ]
+        }
+      }
+    }
+  ]
+}

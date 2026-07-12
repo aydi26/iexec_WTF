@@ -1,4 +1,5 @@
 allowBuilds:
-  esbuild: set this to true or false
+  keccak: true
 onlyBuiltDependencies:
   - esbuild
+  - keccak
