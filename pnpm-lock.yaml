@@ -382,6 +382,9 @@ importers:
       '@iexec-nox/nox-protocol-contracts':
         specifier: 0.2.4
         version: 0.2.4
+      '@openzeppelin/contracts':
+        specifier: 5.6.1
+        version: 5.6.1
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
