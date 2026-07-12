@@ -5,7 +5,7 @@
 // by chainId (11155111 ETH Sepolia, 421614 Arb Sepolia) from the wallet client,
 // so we just hand it the connected viem WalletClient.
 //
-// Client surface used by Manifold views:
+// Client surface used by Noxus views:
 //   encryptInput(value: bigint, 'uint256', appContractAddress) -> { handle, handleProof }
 //   decrypt(handle)        -> { value, solidityType }
 //   publicDecrypt(handle)  -> { value, solidityType, decryptionProof }

@@ -1,6 +1,6 @@
 /**
  * Phase 2 exit — live micro-epoch on ETH Sepolia (docs/PLAN.md Phase 2).
- * Deploys ManifoldBatcher, wraps a little USDC, runs 3 hidden-amount deposits
+ * Deploys NoxusBatcher, wraps a little USDC, runs 3 hidden-amount deposits
  * from one account, closes, and settles with the CCTP burn DISABLED (bridge not
  * yet wired). Asserts the revealed aggregate A equals the known sum.
  * Tiny amounts (0.10 + 0.15 + 0.20 = 0.45 USDC) to conserve faucet USDC.
@@ -26,20 +26,20 @@ async function main() {
   const me = wallet.address;
   const handle = await handleClient(wallet);
   const usdcAddr = (ADDR.USDC as any)[c.chainId];
-  const cusdcAddr = deployments(c.chainId).ManifoldCUSDC;
-  if (!cusdcAddr) throw new Error("deploy ManifoldCUSDC first (scripts/00_wrapper_deploy_verify.ts)");
-  console.log(`\n=== ManifoldBatcher micro-epoch on ${c.name} (me=${me}) ===`);
+  const cusdcAddr = deployments(c.chainId).NoxusCUSDC;
+  if (!cusdcAddr) throw new Error("deploy NoxusCUSDC first (scripts/00_wrapper_deploy_verify.ts)");
+  console.log(`\n=== NoxusBatcher micro-epoch on ${c.name} (me=${me}) ===`);
 
   // deploy batcher (reuse if present)
-  let batcherAddr = deployments(c.chainId).ManifoldBatcher;
+  let batcherAddr = deployments(c.chainId).NoxusBatcher;
   if (!batcherAddr) {
-    const d = await deploy("ManifoldBatcher", wallet, [usdcAddr, cusdcAddr, ADDR.TOKEN_MESSENGER_V2, 3, 3, 8]);
+    const d = await deploy("NoxusBatcher", wallet, [usdcAddr, cusdcAddr, ADDR.TOKEN_MESSENGER_V2, 3, 3, 8]);
     batcherAddr = d.address;
-    saveDeployment(c.chainId, "ManifoldBatcher", batcherAddr);
-    console.log(`deployed ManifoldBatcher ${batcherAddr}`);
-  } else console.log(`reusing ManifoldBatcher ${batcherAddr}`);
+    saveDeployment(c.chainId, "NoxusBatcher", batcherAddr);
+    console.log(`deployed NoxusBatcher ${batcherAddr}`);
+  } else console.log(`reusing NoxusBatcher ${batcherAddr}`);
 
-  const batcher = new Contract(batcherAddr, artifact("ManifoldBatcher").abi, wallet);
+  const batcher = new Contract(batcherAddr, artifact("NoxusBatcher").abi, wallet);
   const usdc = new Contract(usdcAddr, USDC_ABI, wallet);
   const cusdc = new Contract(cusdcAddr, CUSDC_ABI, wallet);
 

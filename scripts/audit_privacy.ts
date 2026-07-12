@@ -8,7 +8,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const AUTHORED = ["contracts/ManifoldBatcher.sol", "contracts/ManifoldDistributor.sol", "contracts/ManifoldCUSDC.sol"];
+const AUTHORED = ["contracts/NoxusBatcher.sol", "contracts/NoxusDistributor.sol", "contracts/NoxusCUSDC.sol"];
 const EVENT_AMOUNT_ALLOWLIST = ["EpochSettled", "EpochReceived", "RefundInitiated", "FallbackClaimRevealed"];
 
 let failures = 0;

@@ -313,7 +313,7 @@ export default function DepositView() {
                 return (
                   <div key={i} className={`mf-step ${st}`}>
                     <div className="mf-step-num">
-                      {st === "done" ? "✓" : st === "failed" ? "!" : i + 1}
+                      {st === "done" ? "" : st === "failed" ? "!" : i + 1}
                     </div>
                     <span className="mf-step-text">{label}</span>
                   </div>

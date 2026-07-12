@@ -25,12 +25,12 @@ async function main() {
   const arbH = await handleClient(arb.wallet);
 
   const ethUsdc = new Contract((ADDR.USDC as any)[11155111], USDC_ABI, eth.wallet);
-  const ethCusdcAddr = deployments(11155111).ManifoldCUSDC;
-  const batcherAddr = deployments(11155111).ManifoldBatcher;
-  const distAddr = deployments(421614).ManifoldDistributor;
+  const ethCusdcAddr = deployments(11155111).NoxusCUSDC;
+  const batcherAddr = deployments(11155111).NoxusBatcher;
+  const distAddr = deployments(421614).NoxusDistributor;
   const cusdc = new Contract(ethCusdcAddr, CUSDC_ABI, eth.wallet);
-  const batcher = new Contract(batcherAddr, artifact("ManifoldBatcher").abi, eth.wallet);
-  const dist = new Contract(distAddr, artifact("ManifoldDistributor").abi, arb.wallet);
+  const batcher = new Contract(batcherAddr, artifact("NoxusBatcher").abi, eth.wallet);
+  const dist = new Contract(distAddr, artifact("NoxusDistributor").abi, arb.wallet);
 
   const amounts = [100_000n, 150_000n, 200_000n];
   const total = amounts.reduce((a, b) => a + b, 0n);
@@ -86,7 +86,7 @@ async function main() {
 
   // recipient client-decrypts their confidential balance (best-effort)
   try {
-    const bal = await new Contract(deployments(421614).ManifoldCUSDC, CUSDC_ABI, arb.wallet).confidentialBalanceOf(me);
+    const bal = await new Contract(deployments(421614).NoxusCUSDC, CUSDC_ABI, arb.wallet).confidentialBalanceOf(me);
     const dec = await arbH.decrypt(bal as `0x${string}`);
     console.log(`recipient decrypted cUSDC balance on Arb = ${dec.value}`);
   } catch (e: any) {

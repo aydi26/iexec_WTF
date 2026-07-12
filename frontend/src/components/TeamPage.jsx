@@ -1,7 +1,6 @@
 import ProfileCard from "./ProfileCard";
 import "./TeamPage.css";
 
-import pfpLeft from "../assets png/pfp card left.png";
 import pfpRight from "../assets png/pfp card right.png";
 
 export default function TeamPage() {

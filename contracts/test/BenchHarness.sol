@@ -7,7 +7,7 @@ import "encrypted-types/EncryptedTypes.sol";
 /// @title BenchHarness — Phase-0b latency spike (docs/PLAN.md). TEST-ONLY.
 /// @notice Exercises the full Nox round-trip (encryptInput -> fromExternal ->
 /// encrypted op -> allow/allowPublicDecryption) so scripts can time the KMS RTT.
-/// Not part of Manifold; single-EOA; never deployed in the demo flow.
+/// Not part of Noxus; single-EOA; never deployed in the demo flow.
 contract BenchHarness {
     euint256 public last; // last ingested handle (== the external input handle)
     euint256 public sum; // running encrypted sum (fresh computed handle)

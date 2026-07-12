@@ -1,15 +1,15 @@
 // ============================================================================
-// Manifold container — the "/" route. Reuses the HyperSecret shell's card/glass
+// Noxus container — the "/" route. Reuses the HyperSecret shell's card/glass
 // styling (mf-shell mirrors the bridge-widget card language) and hosts the five
-// Manifold views behind a tab bar.
+// Noxus views behind a tab bar.
 // ============================================================================
 import { useState } from "react";
-import DepositView from "./manifold/DepositView";
-import EpochDashboard from "./manifold/EpochDashboard";
-import DecryptView from "./manifold/DecryptView";
-import AuditorView from "./manifold/AuditorView";
-import KeeperView from "./manifold/KeeperView";
-import "./Manifold.css";
+import DepositView from "./noxus/DepositView";
+import EpochDashboard from "./noxus/EpochDashboard";
+import DecryptView from "./noxus/DecryptView";
+import AuditorView from "./noxus/AuditorView";
+import KeeperView from "./noxus/KeeperView";
+import "./Noxus.css";
 
 const TABS = [
   { key: "deposit", label: "Deposit", el: DepositView },
@@ -19,7 +19,7 @@ const TABS = [
   { key: "keeper", label: "Keeper", el: KeeperView },
 ];
 
-export default function Manifold() {
+export default function Noxus() {
   const [tab, setTab] = useState("deposit");
   const Active = TABS.find((t) => t.key === tab)?.el ?? DepositView;
 
@@ -27,7 +27,7 @@ export default function Manifold() {
     <div className="mf-shell">
       <div className="mf-header">
         <div className="mf-brand">
-          <span className="mf-title">Manifold</span>
+          <span className="mf-title">Noxus</span>
           <span className="mf-subtitle" style={{ margin: 0 }}>
             confidential USDC settlement
           </span>

@@ -6,10 +6,10 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { sleep } from "./lib/common.js";
 
 const TARGETS = [
-  { chainId: 11155111, address: "0xe195B0396B973C548178Eeb64DC20b9dd9B8406a", path: "contracts/ManifoldCUSDC.sol", name: "ManifoldCUSDC" },
-  { chainId: 11155111, address: "0x92467950c381f9CfCd4D213Bf2D67d464C5266c4", path: "contracts/ManifoldBatcher.sol", name: "ManifoldBatcher" },
-  { chainId: 421614, address: "0x8ECc0b570536Ff5F9710E04880A0f23455d608d5", path: "contracts/ManifoldCUSDC.sol", name: "ManifoldCUSDC" },
-  { chainId: 421614, address: "0xb36F257a0535fF666fFa61af553898a67dF6d863", path: "contracts/ManifoldDistributor.sol", name: "ManifoldDistributor" },
+  { chainId: 11155111, address: "0xe195B0396B973C548178Eeb64DC20b9dd9B8406a", path: "contracts/NoxusCUSDC.sol", name: "NoxusCUSDC" },
+  { chainId: 11155111, address: "0x92467950c381f9CfCd4D213Bf2D67d464C5266c4", path: "contracts/NoxusBatcher.sol", name: "NoxusBatcher" },
+  { chainId: 421614, address: "0x8ECc0b570536Ff5F9710E04880A0f23455d608d5", path: "contracts/NoxusCUSDC.sol", name: "NoxusCUSDC" },
+  { chainId: 421614, address: "0xb36F257a0535fF666fFa61af553898a67dF6d863", path: "contracts/NoxusDistributor.sol", name: "NoxusDistributor" },
 ];
 const SERVER = "https://sourcify.dev/server";
 

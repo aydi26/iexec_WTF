@@ -15,8 +15,8 @@ async function main() {
   const arbH = await handleClient(arb.wallet);
   const epochId = BigInt(process.argv[2] ?? "1");
 
-  const batcher = new Contract(deployments(11155111).ManifoldBatcher, artifact("ManifoldBatcher").abi, eth.wallet);
-  const dist = new Contract(deployments(421614).ManifoldDistributor, artifact("ManifoldDistributor").abi, arb.wallet);
+  const batcher = new Contract(deployments(11155111).NoxusBatcher, artifact("NoxusBatcher").abi, eth.wallet);
+  const dist = new Contract(deployments(421614).NoxusDistributor, artifact("NoxusDistributor").abi, arb.wallet);
 
   const bi = await batcher.epochInfo(epochId);
   console.log(`\n=== Adversarial continue — epoch ${epochId} (batcher state=${bi[0]} active=${bi[1]}) ===`);

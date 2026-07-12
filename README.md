@@ -1,16 +1,16 @@
 <div align="center">
 
-# 🌀 Manifold
+# Noxus
 
 ### Confidential cross-chain USDC settlement over Circle CCTP V2
 
 **Individual amounts never touch the blockchain.** Encrypted deposits are batched on Ethereum Sepolia, one public aggregate bridges via [Circle CCTP V2](https://developers.circle.com/cctp), and distribution on Arbitrum Sepolia is confidential — gated by an on-chain, TEE-verified integrity check that makes cheating detectable and self-punishing.
 
-[![Status](https://img.shields.io/badge/E2E-live%20on%20testnet-brightgreen)](#-whats-verified-live)
-[![Contracts](https://img.shields.io/badge/contracts-Sourcify%20verified-blue)](#-live-deployments)
+[![Status](https://img.shields.io/badge/E2E-live%20on%20testnet-brightgreen)](#whats-verified-live)
+[![Contracts](https://img.shields.io/badge/contracts-Sourcify%20verified-blue)](#live-deployments)
 [![CCTP](https://img.shields.io/badge/Circle%20CCTP%20V2-unmodified-2775ca)](https://developers.circle.com/cctp)
 [![Privacy](https://img.shields.io/badge/iExec%20Nox-ERC--7984%20%2B%20TEE-yellow)](https://docs.noxprotocol.io)
-[![License](https://img.shields.io/badge/license-MIT-green)](#-license--disclaimer)
+[![License](https://img.shields.io/badge/license-MIT-green)](#license--disclaimer)
 
 *Built for the iExec hackathon. Privacy layer over a real, unmodified open-source protocol via **batching**.*
 *Positioning: **confidentiality, not anonymity** — participants visible, amounts never. Audit-friendly by design, not a mixer.*
@@ -23,7 +23,7 @@
 
 `depositForBurn(amount, …)` is a **public event**. Every CCTP treasury move — the ones Coinbase, Kraken, and payroll processors make every day — broadcasts position sizes and flow timing to anyone reading Etherscan. Mixers answer with anonymity (regulatorily radioactive). Mind Network encrypts the *message in transit* — but the burn amount still sits on-chain regardless.
 
-**Manifold makes individual amounts *never exist on-chain*, while the aggregate stays fully auditable.**
+**Noxus makes individual amounts *never exist on-chain*, while the aggregate stays fully auditable.**
 
 ## How it works
 
@@ -31,9 +31,9 @@
 sequenceDiagram
     autonumber
     participant U as Users (N depositors)
-    participant B as ManifoldBatcher<br/>(ETH Sepolia)
+    participant B as NoxusBatcher<br/>(ETH Sepolia)
     participant C as CCTP V2 + Iris
-    participant D as ManifoldDistributor<br/>(Arb Sepolia)
+    participant D as NoxusDistributor<br/>(Arb Sepolia)
 
     Note over U,D: Each depositor pre-registers their confidential<br/>destination claim on the Distributor (own tx)
     U->>B: deposit(recipient, encAmount, dstHandle)
@@ -51,11 +51,11 @@ sequenceDiagram
     end
 ```
 
-**What an observer sees per epoch:** the participant set ✅, the recipient set ✅, and the aggregate `A` ✅ (one number, unavoidable). Never a per-user deposit ❌, a per-recipient payout ❌, or any individual amount ❌ — while an auditor can view any single amount on demand via a revocable on-chain grant.
+**What an observer sees per epoch:** the participant set (visible), the recipient set (visible), and the aggregate `A` (one public number, unavoidable) — but never a per-user deposit, never a per-recipient payout, never any individual amount. An auditor can still view any single amount on demand via a revocable on-chain grant.
 
 ### The integrity check — why cheating doesn't pay
 
-Nox handles are **chain-scoped**, so each depositor encrypts their amount twice: once for the source-side sum, once as a fresh input for the destination. Nothing cryptographically binds the two plaintexts — so an attacker could try to inflate their destination claim. Manifold catches this **on-chain, in the TEE, before any money moves**:
+Nox handles are **chain-scoped**, so each depositor encrypts their amount twice: once for the source-side sum, once as a fresh input for the destination. Nothing cryptographically binds the two plaintexts — so an attacker could try to inflate their destination claim. Noxus catches this **on-chain, in the TEE, before any money moves**:
 
 ```solidity
 euint256 total = Σ Nox.fromExternal(claim_i);     // encrypted sum of destination claims
@@ -70,7 +70,7 @@ Nox.allowPublicDecryption(ok);                     // reveal only the boolean
 
 ---
 
-## ✅ What's verified live
+## What's verified live
 
 Both critical flows run **end-to-end on real testnets with zero mock data** (real USDC, real Iris attestations, real Nox KMS proofs):
 
@@ -81,18 +81,18 @@ Both critical flows run **end-to-end on real testnets with zero mock data** (rea
 | **Latency** | Nox reveal round-trip ~2–7 s (GO-LIVE tier) — fast enough for a live demo; block confirmation, not the TEE, is the bottleneck |
 | **Privacy audit** | exactly 3 legal `allowPublicDecryption` sites, no amount leakage in events, no branching on encrypted values |
 
-Reproduce with the scripts in [`scripts/`](scripts/) — see [Quickstart](#-quickstart).
+Reproduce with the scripts in [`scripts/`](scripts/) — see [Quickstart](#quickstart).
 
-## 🚀 Live deployments
+## Live deployments
 
-All four contracts are **verified on [Sourcify](https://sourcify.dev)** (exact match).
+All four contracts are **verified on [Sourcify](https://sourcify.dev)** and live on both testnets. They were deployed and verified before the *Noxus* rename, so on-chain metadata still shows the pre-rename contract names — the Solidity source is byte-identical. A fresh Noxus-named redeploy is a one-command step (`scripts/02_deploy_cross_chain.ts`).
 
 | Contract | Chain | Address |
 |---|---|---|
-| `ManifoldBatcher` | ETH Sepolia | [`0x92467950c381f9CfCd4D213Bf2D67d464C5266c4`](https://sepolia.etherscan.io/address/0x92467950c381f9CfCd4D213Bf2D67d464C5266c4) |
-| `ManifoldCUSDC` (cUSDC) | ETH Sepolia | [`0xe195B0396B973C548178Eeb64DC20b9dd9B8406a`](https://sepolia.etherscan.io/address/0xe195B0396B973C548178Eeb64DC20b9dd9B8406a) |
-| `ManifoldDistributor` | Arb Sepolia | [`0xb36F257a0535fF666fFa61af553898a67dF6d863`](https://sepolia.arbiscan.io/address/0xb36F257a0535fF666fFa61af553898a67dF6d863) |
-| `ManifoldCUSDC` (cUSDC) | Arb Sepolia | [`0x8ECc0b570536Ff5F9710E04880A0f23455d608d5`](https://sepolia.arbiscan.io/address/0x8ECc0b570536Ff5F9710E04880A0f23455d608d5) |
+| `NoxusBatcher` | ETH Sepolia | [`0x92467950c381f9CfCd4D213Bf2D67d464C5266c4`](https://sepolia.etherscan.io/address/0x92467950c381f9CfCd4D213Bf2D67d464C5266c4) |
+| `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0xe195B0396B973C548178Eeb64DC20b9dd9B8406a`](https://sepolia.etherscan.io/address/0xe195B0396B973C548178Eeb64DC20b9dd9B8406a) |
+| `NoxusDistributor` | Arb Sepolia | [`0xb36F257a0535fF666fFa61af553898a67dF6d863`](https://sepolia.arbiscan.io/address/0xb36F257a0535fF666fFa61af553898a67dF6d863) |
+| `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0x8ECc0b570536Ff5F9710E04880A0f23455d608d5`](https://sepolia.arbiscan.io/address/0x8ECc0b570536Ff5F9710E04880A0f23455d608d5) |
 
 > Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3.
 
@@ -102,9 +102,9 @@ All four contracts are **verified on [Sourcify](https://sourcify.dev)** (exact m
 
 | Contract | Chain | Role |
 |---|---|---|
-| [`ManifoldBatcher.sol`](contracts/ManifoldBatcher.sol) | ETH Sepolia | Confidential deposits → encrypted sum → epoch settle → unwrap → `depositForBurnWithHook`; receives the refund leg |
-| [`ManifoldDistributor.sol`](contracts/ManifoldDistributor.sol) | Arb Sepolia | CCTP mint + hook → integrity check → confidential distribution / fallback + refund |
-| [`ManifoldCUSDC.sol`](contracts/ManifoldCUSDC.sol) ×2 | both | Thin deploy of iExec's official `ERC20ToERC7984Wrapper` around testnet USDC |
+| [`NoxusBatcher.sol`](contracts/NoxusBatcher.sol) | ETH Sepolia | Confidential deposits → encrypted sum → epoch settle → unwrap → `depositForBurnWithHook`; receives the refund leg |
+| [`NoxusDistributor.sol`](contracts/NoxusDistributor.sol) | Arb Sepolia | CCTP mint + hook → integrity check → confidential distribution / fallback + refund |
+| [`NoxusCUSDC.sol`](contracts/NoxusCUSDC.sol) ×2 | both | Thin deploy of iExec's official `ERC20ToERC7984Wrapper` around testnet USDC |
 | [`CCTPMessageParser.sol`](contracts/lib/CCTPMessageParser.sol) | — | Reads CCTP V2 message fields by verified offset |
 | CCTP V2, NoxCompute | both | **Unmodified official deployments — called, never touched** |
 
@@ -117,11 +117,11 @@ All four contracts are **verified on [Sourcify](https://sourcify.dev)** (exact m
 - **Scripts / SDK:** TypeScript, ethers v6, `@iexec-nox/handle` (client-side encrypt / decrypt / publicDecrypt).
 - **Frontend:** Vite + React + wagmi/viem + the Nox handle SDK.
 
-## 📦 Repository layout
+## Repository layout
 
 ```
-manifold/
-├── contracts/           ManifoldBatcher · ManifoldDistributor · ManifoldCUSDC · lib/ · interfaces/
+noxus/
+├── contracts/           NoxusBatcher · NoxusDistributor · NoxusCUSDC · lib/ · interfaces/
 ├── scripts/             00 wrappers · 01 batcher · 02 deploy+wire · 03 seed · 04 honest E2E
 │                        05/05b/05c fallback+refund · bench_nox_latency · audit_privacy · verify_sourcify
 ├── frontend/            Vite/React dApp — deposit · epoch dashboard · decrypt · auditor · keeper
@@ -131,7 +131,7 @@ manifold/
 └── hardhat.config.cjs · .env.example
 ```
 
-## ⚡ Quickstart
+## Quickstart
 
 ```bash
 git clone https://github.com/aydi26/iexec_WTF && cd iexec_WTF
@@ -168,7 +168,7 @@ Faucets: [Sepolia ETH](https://sepoliafaucet.com) · [Arbitrum Sepolia ETH](http
 
 ---
 
-## 🔒 Privacy model
+## Privacy model
 
 **Guaranteed by construction**
 - Individual amounts are never emitted, stored, or derivable on-chain.
@@ -183,20 +183,20 @@ Faucets: [Sepolia ETH](https://sepoliafaucet.com) · [Arbitrum Sepolia ETH](http
 
 ## Related work
 
-**Mind Network** (FHE layer for CCTP) encrypts the *message payload* in transit — but the burn amount is an on-chain event whatever the message says, so encrypting the envelope hides nothing from Etherscan. Manifold attacks the on-chain layer: amounts never exist there, only the aggregate, and cross-chain consistency is TEE-verified. Different stack (TEE/Nox vs FHE), path (direct CCTP V2 Hooks vs via CCIP), and mechanism (batching + integrity check vs payload encryption). **Mixers** provide anonymity sets; Manifold takes the opposite compliance posture.
+**Mind Network** (FHE layer for CCTP) encrypts the *message payload* in transit — but the burn amount is an on-chain event whatever the message says, so encrypting the envelope hides nothing from Etherscan. Noxus attacks the on-chain layer: amounts never exist there, only the aggregate, and cross-chain consistency is TEE-verified. Different stack (TEE/Nox vs FHE), path (direct CCTP V2 Hooks vs via CCIP), and mechanism (batching + integrity check vs payload encryption). **Mixers** provide anonymity sets; Noxus takes the opposite compliance posture.
 
-## 📚 More
+## More
 
 - [`docs/SPEC.md`](docs/SPEC.md) — full technical spec, verified facts, constraints, decision log, and session worklog.
 - [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — the ≤4-minute demo shot list.
 - [`feedback.md`](feedback.md) — feedback on the iExec tooling (required deliverable).
 
-## 👥 Team
+## Team
 
 **Aiden** — [X](https://x.com/aiden_7788) · [LinkedIn](https://www.linkedin.com/in/adrian-verdes/)
 
-## 📄 License & disclaimer
+## License & disclaimer
 
-Our code is **MIT**. It interacts with unmodified third-party deployments (Circle CCTP V2, iExec Nox — their licenses apply). The frontend UI shell is adapted from our earlier hackathon project; all Manifold protocol logic is new.
+Our code is **MIT**. It interacts with unmodified third-party deployments (Circle CCTP V2, iExec Nox — their licenses apply). The frontend UI shell is adapted from our earlier hackathon project; all Noxus protocol logic is new.
 
-> ⚠️ **Testnet-only, unaudited, hackathon software — never use with real funds.** Not affiliated with Circle or iExec.
+>  **Testnet-only, unaudited, hackathon software — never use with real funds.** Not affiliated with Circle or iExec.

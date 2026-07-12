@@ -12,38 +12,28 @@
         "type": "address"
       },
       {
+        "internalType": "contract IMessageTransmitterV2",
+        "name": "_transmitter",
+        "type": "address"
+      },
+      {
         "internalType": "contract ITokenMessengerV2",
         "name": "_tokenMessenger",
         "type": "address"
       },
       {
-        "internalType": "contract IMessageTransmitterV2",
-        "name": "_messageTransmitter",
-        "type": "address"
-      },
-      {
         "internalType": "uint32",
-        "name": "_dstDomain",
+        "name": "_srcDomain",
         "type": "uint32"
       },
       {
-        "internalType": "uint32",
-        "name": "_minDepositors",
-        "type": "uint32"
-      },
-      {
-        "internalType": "uint32",
-        "name": "_maxClaims",
-        "type": "uint32"
+        "internalType": "uint64",
+        "name": "_fallbackTimeout",
+        "type": "uint64"
       }
     ],
     "stateMutability": "nonpayable",
     "type": "constructor"
-  },
-  {
-    "inputs": [],
-    "name": "AggregateMismatch",
-    "type": "error"
   },
   {
     "inputs": [],
@@ -52,7 +42,27 @@
   },
   {
     "inputs": [],
-    "name": "AlreadyWithdrawn",
+    "name": "BadOrigin",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "BadState",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "BufferShort",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ClaimsHashMismatch",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "CountMismatch",
     "type": "error"
   },
   {
@@ -68,28 +78,31 @@
   },
   {
     "inputs": [],
-    "name": "NotClosed",
+    "name": "MaxFeeTooHigh",
     "type": "error"
   },
   {
     "inputs": [],
-    "name": "NotDepositor",
+    "name": "NotRecipient",
     "type": "error"
   },
   {
     "inputs": [],
-    "name": "NotOpen",
+    "name": "NotTimedOut",
     "type": "error"
   },
   {
-    "inputs": [],
-    "name": "TooFewDepositors",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "TooManyClaims",
-    "type": "error"
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      }
+    ],
+    "name": "CheckRequested",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -107,57 +120,7 @@
         "type": "uint256"
       }
     ],
-    "name": "DepositWithdrawn",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "epochId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "depositor",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "index",
-        "type": "uint256"
-      }
-    ],
-    "name": "Deposited",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "epochId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint32",
-        "name": "activeCount",
-        "type": "uint32"
-      }
-    ],
-    "name": "EpochClosed",
+    "name": "ClaimRevealRequested",
     "type": "event"
   },
   {
@@ -170,7 +133,20 @@
         "type": "uint256"
       }
     ],
-    "name": "EpochRefunded",
+    "name": "EpochDistributed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      }
+    ],
+    "name": "EpochFallback",
     "type": "event"
   },
   {
@@ -187,15 +163,40 @@
         "internalType": "uint256",
         "name": "aggregate",
         "type": "uint256"
+      }
+    ],
+    "name": "EpochReceived",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
       },
       {
         "indexed": false,
-        "internalType": "bytes32",
-        "name": "claimsHash",
-        "type": "bytes32"
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
       }
     ],
-    "name": "EpochSettled",
+    "name": "FallbackClaimRevealed",
     "type": "event"
   },
   {
@@ -204,7 +205,7 @@
       {
         "indexed": false,
         "internalType": "bytes32",
-        "name": "remoteDistributor",
+        "name": "remoteBatcher",
         "type": "bytes32"
       }
     ],
@@ -212,13 +213,120 @@
     "type": "event"
   },
   {
-    "inputs": [],
-    "name": "bridgeEnabled",
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      }
+    ],
+    "name": "PreRegistered",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "aggregate",
+        "type": "uint256"
+      }
+    ],
+    "name": "RefundInitiated",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      }
+    ],
+    "name": "checkEpoch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      }
+    ],
+    "name": "checkHandle",
     "outputs": [
       {
-        "internalType": "bool",
+        "internalType": "euint256",
         "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      }
+    ],
+    "name": "claimAt",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "dstHandle",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "euint256",
+        "name": "ingested",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bool",
+        "name": "revealed",
         "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "revealedAmount",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -238,26 +346,6 @@
         "internalType": "bytes32",
         "name": "",
         "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "closeEpoch",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "currentEpoch",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -292,110 +380,6 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "dstRecipient",
-        "type": "address"
-      },
-      {
-        "internalType": "externalEuint256",
-        "name": "srcHandle",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "bytes",
-        "name": "srcProof",
-        "type": "bytes"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "dstHandle",
-        "type": "bytes32"
-      }
-    ],
-    "name": "deposit",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "dstDomain",
-    "outputs": [
-      {
-        "internalType": "uint32",
-        "name": "",
-        "type": "uint32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "epochId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "index",
-        "type": "uint256"
-      }
-    ],
-    "name": "entryAt",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "depositor",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "dstHandle",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "bool",
-        "name": "withdrawn",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "epochId",
-        "type": "uint256"
-      }
-    ],
-    "name": "epochHandles",
-    "outputs": [
-      {
-        "internalType": "euint256",
-        "name": "encSum",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "euint256",
-        "name": "unwrapRequestId",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "uint256",
         "name": "epochId",
         "type": "uint256"
@@ -404,14 +388,9 @@
     "name": "epochInfo",
     "outputs": [
       {
-        "internalType": "enum ManifoldBatcher.State",
+        "internalType": "enum NoxusDistributor.State",
         "name": "state",
         "type": "uint8"
-      },
-      {
-        "internalType": "uint32",
-        "name": "activeCount",
-        "type": "uint32"
       },
       {
         "internalType": "uint256",
@@ -419,14 +398,27 @@
         "type": "uint256"
       },
       {
-        "internalType": "bool",
-        "name": "refunded",
-        "type": "bool"
+        "internalType": "uint256",
+        "name": "feeExecuted",
+        "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "entryCount",
+        "name": "claimCount",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "fallbackTimeout",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
       }
     ],
     "stateMutability": "view",
@@ -440,50 +432,78 @@
         "type": "uint256"
       },
       {
+        "internalType": "bytes",
+        "name": "proof",
+        "type": "bytes"
+      }
+    ],
+    "name": "finalizeEpoch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
-        "name": "index",
+        "name": "epochId",
+        "type": "uint256"
+      }
+    ],
+    "name": "forceFallback",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "maxFee",
+        "type": "uint256"
+      }
+    ],
+    "name": "initiateRefund",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
         "type": "uint256"
       },
       {
         "internalType": "address",
-        "name": "auditor",
+        "name": "recipient",
         "type": "address"
+      },
+      {
+        "internalType": "externalEuint256",
+        "name": "dstHandle",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proof",
+        "type": "bytes"
       }
     ],
-    "name": "grantAuditor",
+    "name": "preRegister",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "maxClaims",
-    "outputs": [
-      {
-        "internalType": "uint32",
-        "name": "",
-        "type": "uint32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "messageTransmitter",
-    "outputs": [
-      {
-        "internalType": "contract IMessageTransmitterV2",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "minDepositors",
+    "name": "refundDstDomain",
     "outputs": [
       {
         "internalType": "uint32",
@@ -496,11 +516,6 @@
   },
   {
     "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "epochId",
-        "type": "uint256"
-      },
       {
         "internalType": "bytes",
         "name": "message",
@@ -512,14 +527,14 @@
         "type": "bytes"
       }
     ],
-    "name": "relayRefund",
+    "name": "relayReceive",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "remoteDistributor",
+    "name": "remoteBatcher",
     "outputs": [
       {
         "internalType": "bytes32",
@@ -533,24 +548,55 @@
   {
     "inputs": [
       {
-        "internalType": "bytes",
-        "name": "proofA",
-        "type": "bytes"
-      },
-      {
-        "internalType": "bytes",
-        "name": "proofT",
-        "type": "bytes"
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "maxFee",
+        "name": "index",
         "type": "uint256"
       }
     ],
-    "name": "settleEpoch",
+    "name": "requestClaimReveal",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "proof",
+        "type": "bytes"
+      }
+    ],
+    "name": "resolveClaim",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "srcDomain",
+    "outputs": [
+      {
+        "internalType": "uint32",
+        "name": "",
+        "type": "uint32"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -559,6 +605,19 @@
     "outputs": [
       {
         "internalType": "contract ITokenMessengerV2",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "transmitter",
+    "outputs": [
+      {
+        "internalType": "contract IMessageTransmitterV2",
         "name": "",
         "type": "address"
       }
@@ -583,29 +642,11 @@
     "inputs": [
       {
         "internalType": "bytes32",
-        "name": "_remoteDistributor",
+        "name": "_remoteBatcher",
         "type": "bytes32"
       }
     ],
     "name": "wirePeer",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "epochId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "index",
-        "type": "uint256"
-      }
-    ],
-    "name": "withdrawDeposit",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

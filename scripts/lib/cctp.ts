@@ -72,7 +72,7 @@ export async function fetchAttestation(srcDomain: number, burnTxHash: string, ti
   }
 }
 
-/** Call MessageTransmitterV2.receiveMessage directly (for non-Manifold mints, e.g. seeding). */
+/** Call MessageTransmitterV2.receiveMessage directly (for non-Noxus mints, e.g. seeding). */
 export async function receiveMessage(wallet: Wallet, message: string, attestation: string): Promise<string> {
   const tr = new Contract(ADDR.MESSAGE_TRANSMITTER_V2, TRANSMITTER_ABI, wallet);
   const tx = await tr.receiveMessage(message, attestation);

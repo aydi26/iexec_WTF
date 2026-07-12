@@ -1,8 +1,8 @@
 /**
- * Phase 1 — deploy ManifoldCUSDC (cached) + verify the full wrapper cycle live:
+ * Phase 1 — deploy NoxusCUSDC (cached) + verify the full wrapper cycle live:
  * approve -> wrap(1 USDC) -> unwrap(external input) -> publicDecrypt(unwrapRequestId)
  * -> finalizeUnwrap -> assert USDC balance restored. Proves the two-step reveal
- * machinery (D-007) end-to-end before any Manifold contract exists.
+ * machinery (D-007) end-to-end before any Noxus contract exists.
  *
  * Usage: tsx scripts/00_wrapper_deploy_verify.ts [--chain eth|arb]
  */
@@ -20,15 +20,15 @@ async function main() {
   console.log(`\n=== ${c.name} — wrapper deploy+verify (me=${me}) ===`);
 
   // deploy or reuse
-  let wrapperAddr = deployments(c.chainId).ManifoldCUSDC;
+  let wrapperAddr = deployments(c.chainId).NoxusCUSDC;
   if (!wrapperAddr) {
-    const d = await deploy("ManifoldCUSDC", wallet, [usdcAddr]);
+    const d = await deploy("NoxusCUSDC", wallet, [usdcAddr]);
     wrapperAddr = d.address;
-    saveDeployment(c.chainId, "ManifoldCUSDC", wrapperAddr);
-    console.log(`deployed ManifoldCUSDC ${wrapperAddr}`);
-  } else console.log(`reusing ManifoldCUSDC ${wrapperAddr}`);
+    saveDeployment(c.chainId, "NoxusCUSDC", wrapperAddr);
+    console.log(`deployed NoxusCUSDC ${wrapperAddr}`);
+  } else console.log(`reusing NoxusCUSDC ${wrapperAddr}`);
 
-  const a = artifact("ManifoldCUSDC");
+  const a = artifact("NoxusCUSDC");
   const wrapper = new Contract(wrapperAddr, a.abi, wallet);
   const usdc = new Contract(usdcAddr, USDC_ABI, wallet);
   const handle = await handleClient(wallet);

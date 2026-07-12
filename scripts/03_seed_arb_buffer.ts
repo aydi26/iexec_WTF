@@ -20,7 +20,7 @@ async function main() {
   const me = eth.wallet.address;
   const ethUsdc = (ADDR.USDC as any)[11155111];
   const arbUsdc = (ADDR.USDC as any)[421614];
-  const dist = deployments(421614).ManifoldDistributor;
+  const dist = deployments(421614).NoxusDistributor;
 
   const bridgeAmt = 1_500_000n; // 1.5 USDC
   const bufferAmt = 500_000n; // 0.5 USDC to the Distributor

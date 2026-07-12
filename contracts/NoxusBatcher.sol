@@ -11,14 +11,14 @@ import {ITokenMessengerV2} from "./interfaces/ITokenMessengerV2.sol";
 import {IMessageTransmitterV2} from "./interfaces/IMessageTransmitterV2.sol";
 import {CCTPMessageParser} from "./lib/CCTPMessageParser.sol";
 
-/// @title ManifoldBatcher (ETH Sepolia source leg) — see docs/PLAN.md §3.1.
+/// @title NoxusBatcher (ETH Sepolia source leg) — see docs/PLAN.md §3.1.
 /// @notice Confidential cUSDC deposits accumulate into an encrypted sum; one
 /// public aggregate A is revealed at settle and bridged via CCTP V2 with a
 /// hookData commitment (epochId + claimsHash) binding the destination claims.
 /// Individual amounts never touch the chain. D-006 = option B: depositors
 /// pre-register their dst claim on the Distributor; here we only record the
 /// (recipient, dstHandle) pairs to build claimsHash.
-contract ManifoldBatcher {
+contract NoxusBatcher {
     using CCTPMessageParser for bytes;
 
     enum State { Open, Closed, Settled, Refunded }
@@ -43,7 +43,7 @@ contract ManifoldBatcher {
 
     // --- immutables / wiring ---
     IERC20 public immutable usdc;
-    IERC7984 public immutable cusdc; // our ManifoldCUSDC wrapper (as ERC-7984)
+    IERC7984 public immutable cusdc; // our NoxusCUSDC wrapper (as ERC-7984)
     IERC20ToERC7984Wrapper public immutable wrapper; // same address, wrapper view
     ITokenMessengerV2 public immutable tokenMessenger;
     IMessageTransmitterV2 public immutable messageTransmitter; // for the refund leg

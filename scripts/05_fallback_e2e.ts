@@ -26,12 +26,12 @@ async function main() {
   const arbH = await handleClient(arb.wallet);
 
   const ethUsdc = new Contract((ADDR.USDC as any)[11155111], USDC_ABI, eth.wallet);
-  const ethCusdcAddr = deployments(11155111).ManifoldCUSDC;
-  const batcherAddr = deployments(11155111).ManifoldBatcher;
-  const distAddr = deployments(421614).ManifoldDistributor;
+  const ethCusdcAddr = deployments(11155111).NoxusCUSDC;
+  const batcherAddr = deployments(11155111).NoxusBatcher;
+  const distAddr = deployments(421614).NoxusDistributor;
   const cusdc = new Contract(ethCusdcAddr, CUSDC_ABI, eth.wallet);
-  const batcher = new Contract(batcherAddr, artifact("ManifoldBatcher").abi, eth.wallet);
-  const dist = new Contract(distAddr, artifact("ManifoldDistributor").abi, arb.wallet);
+  const batcher = new Contract(batcherAddr, artifact("NoxusBatcher").abi, eth.wallet);
+  const dist = new Contract(distAddr, artifact("NoxusDistributor").abi, arb.wallet);
 
   const src = [100_000n, 150_000n, 200_000n]; // honest source deposits
   const dst = [100_000n, 150_000n, 990_000n]; // #3 inflates the destination claim

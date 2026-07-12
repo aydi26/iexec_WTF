@@ -20,4 +20,4 @@ typechain-types/
 .DS_Store
 Thumbs.db
 
-# Manifold contract addresses per chain (safe to commit — public)
+# Noxus contract addresses per chain (safe to commit — public)

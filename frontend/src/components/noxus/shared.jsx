@@ -1,4 +1,4 @@
-// Shared UI primitives for the Manifold views.
+// Shared UI primitives for the Noxus views.
 import { useState, useCallback } from "react";
 import { useAccount, useChainId, useConnect, useSwitchChain } from "wagmi";
 import { EPOCH_STATE, txUrl } from "../../config/contracts";
@@ -90,7 +90,7 @@ export function TxStatus({ label, hash, isPending, isConfirming, isSuccess, isEr
               <span className="mf-spinner" /> confirming…
             </span>
           )}
-          {isSuccess && <span style={{ color: "#B0F2B6" }}>✓ confirmed</span>}
+          {isSuccess && <span style={{ color: "#B0F2B6" }}> confirmed</span>}
           {isError && <span style={{ color: "#ff6b6b" }}>reverted</span>}
         </span>
       </div>

@@ -11,12 +11,12 @@ import {IMessageTransmitterV2} from "./interfaces/IMessageTransmitterV2.sol";
 import {ITokenMessengerV2} from "./interfaces/ITokenMessengerV2.sol";
 import {CCTPMessageParser} from "./lib/CCTPMessageParser.sol";
 
-/// @title ManifoldDistributor (Arb Sepolia destination leg) — docs/PLAN.md §3.2.
+/// @title NoxusDistributor (Arb Sepolia destination leg) — docs/PLAN.md §3.2.
 /// @notice Depositors pre-register their confidential destination claim directly
 /// (D-006 = option B, owner-binding). On CCTP mint, the aggregate A arrives; an
 /// on-chain TEE-verified integrity check (Σ claims == A) gates confidential
 /// distribution. On failure: opt-in attribution reveal + refund-to-source.
-contract ManifoldDistributor {
+contract NoxusDistributor {
     using CCTPMessageParser for bytes;
 
     enum State { None, PreRegistering, Received, CheckPending, Distributed, FallbackAttribution, RefundInitiated }

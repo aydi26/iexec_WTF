@@ -1,12 +1,12 @@
-# Manifold — Implementation Plan (planning session S3, 2026-07-12)
+# Noxus — Implementation Plan (planning session S3, 2026-07-12)
 
 ## Context
 
-Manifold ships confidential cross-chain USDC settlement over unmodified Circle CCTP V2, using iExec Nox as the privacy layer: encrypted deposits batch on ETH Sepolia, one public aggregate bridges to Arbitrum Sepolia, and a TEE-verified integrity check gates confidential distribution. Judging bar: deployed per the brief, end-to-end with zero mock data, ≤4-min video, `feedback.md`, ≤3 weeks. The repo today contains only the spec (`README_MANIFOLD.md`); no code, no `package.json`. This plan turns §12's build order into executable phases, resolves both contracts to signature/state-machine level, and front-loads a Day-0 GO/NO-GO gate.
+Noxus ships confidential cross-chain USDC settlement over unmodified Circle CCTP V2, using iExec Nox as the privacy layer: encrypted deposits batch on ETH Sepolia, one public aggregate bridges to Arbitrum Sepolia, and a TEE-verified integrity check gates confidential distribution. Judging bar: deployed per the brief, end-to-end with zero mock data, ≤4-min video, `feedback.md`, ≤3 weeks. The repo today contains only the spec (`README_NOXUS.md`); no code, no `package.json`. This plan turns §12's build order into executable phases, resolves both contracts to signature/state-machine level, and front-loads a Day-0 GO/NO-GO gate.
 
 This session: primary-source verification burned down most §7.6 unknowns (§1 below); the design was then adversarially reviewed by three independent critics and revised (opt-in fallback reveal, deposit-withdrawal healing, revised latency tiers, expiration handling). Nothing modifies CCTP or Nox (G1); every address carries provenance or a re-verification task (G2); `allowPublicDecryption` appears at exactly 3 authored sites (G3); no implementation code was written.
 
-**User decisions recorded (asked 2026-07-12):** frontend = port of `skar8848/HyperSecret-hack4privacy` (team page keeps only the Aiden card) · keeper fully driven/visible via frontend with on-screen proof · demo amounts 3.10/2.45/4.45 → A = 10.00 · keep spec names + rename `README_MANIFOLD.md` → `README.md` at commit #1.
+**User decisions recorded (asked 2026-07-12):** frontend = port of `skar8848/HyperSecret-hack4privacy` (team page keeps only the Aiden card) · keeper fully driven/visible via frontend with on-screen proof · demo amounts 3.10/2.45/4.45 → A = 10.00 · keep spec names + rename `README_NOXUS.md` → `README.md` at commit #1.
 
 ---
 
@@ -19,7 +19,7 @@ Re-confirmed from vendored/installed source at execution time before first use (
 |---|---|---|
 | TokenMessengerV2 testnet (BOTH chains — CREATE2-identical) | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | developers.circle.com/cctp/evm-smart-contracts |
 | MessageTransmitterV2 testnet (BOTH chains) | `0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275` | same |
-| ⚠️ **Correction**: README §5's `0x81D4…4B64` | is the **MAINNET** transmitter (Etherscan-labeled) — never use on testnet | Etherscan cross-check |
+|  **Correction**: README §5's `0x81D4…4B64` | is the **MAINNET** transmitter (Etherscan-labeled) — never use on testnet | Etherscan cross-check |
 | USDC testnet | ETH Sep `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` · Arb Sep `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` | usdc-contract-addresses page |
 | `depositForBurnWithHook` signature | matches README §5 exactly | TokenMessengerV2.sol (master) |
 | **Correction**: BurnMessageV2 offsets | maxFee@132, **feeExecuted@164, expirationBlock@196** (README §5 has these two swapped), hookData@228; outer MessageV2 header = 148 B (nonce bytes32@12, destinationCaller@108, messageBody@148) | BurnMessageV2.sol + MessageV2.sol + docs |
@@ -62,7 +62,7 @@ Timeline anchors: **W1** Jul 12–18 (Phases 0–2) · **W2** Jul 19–26 (Phase
 **Objective:** burn down every remaining §7.6 unknown against live infra before any product code. Depends on: nothing.
 
 **0a. Repo bootstrap (≈1 h)**
-- [ ] Rename `README_MANIFOLD.md` → `README.md` (user-confirmed Q4); commit #1 includes `.gitignore` (`.env`, `node_modules/`, keys — G7)
+- [ ] Rename `README_NOXUS.md` → `README.md` (user-confirmed Q4); commit #1 includes `.gitignore` (`.env`, `node_modules/`, keys — G7)
 - [ ] **Apply the §5 safety corrections from §1 above in the same commit** (address relabel + offsets), quoted in the S3 worklog entry
 - [ ] Author `.env.example` (`DEPLOYER_PRIVATE_KEY`, `KEEPER_PRIVATE_KEY`, `ETH_SEPOLIA_RPC_URL`, `ARB_SEPOLIA_RPC_URL`, `ETHERSCAN_API_KEY`, `ARBISCAN_API_KEY`); `cp .env.example .env`
 - [ ] `pnpm init`; install pinned: `@iexec-nox/handle@0.1.0-beta.13`, `@iexec-nox/nox-protocol-contracts@0.2.4`, `@iexec-nox/nox-confidential-contracts@0.2.2`, hardhat + toolbox, ethers v6, typescript. Compiler 0.8.27 (or highest Nox packages accept)
@@ -111,18 +111,18 @@ With the real SDK, build dst-chain (421614) inputs; `hookData = abi.encode(uint2
 
 - [ ] Vendor CCTP V2 interfaces + message constants → `contracts/interfaces/{ITokenMessengerV2,IMessageTransmitterV2}.sol`, `contracts/lib/CCTPMessageParser.sol` skeleton (offsets per §1; commit hash in headers)
 - [ ] **Pin from installed Nox source (D-007/8/9 checklist):** wrapper unwrap/finalizeUnwrap/wrap exact shapes (fresh-handle finding) · **`confidentialTransfer` signature + return type** (currently assumed — G10) · external-input calldata type name (`externalEuint256`?) · `setOperator` API · **does `allow*` require `isAllowed(h, msg.sender)` on the granted handle?** (drives closeEpoch design — §3.1) · **does the wrapper/token grant recipients ACL on transfer/balance handles internally?** (drives the allow(t_i, …) rows) · `select` type genericity (ebool operands?) · `removeViewer` existence (§1 README promises revocable auditor access — absent ⇒ decision-change flag) · same-tx symbolic chaining from `Compute.sol`
-- [ ] Deploy `cUSDCWrapper` ×2 (`scripts/00_deploy_wrappers.ts`): official wrapper, underlying = §1 USDC addresses, "Manifold Confidential USDC"/"cUSDC" (Q4 confirmed); explorer-verify both
-- [ ] Live 1-USDC wrap → unwrap → finalizeUnwrap cycle on ETH Sepolia (`scripts/verify_wrapper_semantics.ts`) — proves the two-step reveal machinery before any Manifold code
+- [ ] Deploy `cUSDCWrapper` ×2 (`scripts/00_deploy_wrappers.ts`): official wrapper, underlying = §1 USDC addresses, "Noxus Confidential USDC"/"cUSDC" (Q4 confirmed); explorer-verify both
+- [ ] Live 1-USDC wrap → unwrap → finalizeUnwrap cycle on ETH Sepolia (`scripts/verify_wrapper_semantics.ts`) — proves the two-step reveal machinery before any Noxus code
 - [ ] L2 fork spike: garbage-proof `fromExternal` against LIVE NoxCompute (published source ≠ deployed proxy impl — UUPS); `allowThis`-on-wrapper-owned-handle behavior; `isAllowed` staticcalls
 - [ ] Local harness: hardhat chainId 11155111/421614 + `hardhat_setCode` `NoxComputeStub` at pinned addresses
 
 **Commands:** `pnpm hardhat run scripts/00_deploy_wrappers.ts --network {ethSepolia,arbSepolia}` · `pnpm hardhat verify …` · `pnpm test`. **Exit:** D-007/8/9 logged in README decision log; wrappers live + verified; live cycle succeeded; stub harness green.
 
-### Phase 2 — ManifoldBatcher (Jul 15–18, ~3 d) — W1 exit
+### Phase 2 — NoxusBatcher (Jul 15–18, ~3 d) — W1 exit
 
 **Objective:** deposits + encSum correct; epoch settles on ETH Sepolia (burn behind a flag). Depends on: Phase 1.
 
-- [ ] `contracts/ManifoldBatcher.sol` per §3.1 (constructor init, deposit, withdrawDeposit, closeEpoch, settleEpoch, relayRefund skeleton, auditor passthroughs, view getters)
+- [ ] `contracts/NoxusBatcher.sol` per §3.1 (constructor init, deposit, withdrawDeposit, closeEpoch, settleEpoch, relayRefund skeleton, auditor passthroughs, view getters)
 - [ ] L1 suite (`test/batcher.t.ts`): state machine, minDepositors reverts (close AND settle), ACL ordering (allowThis-after-mutation), encrypted-sum accumulation shape, withdrawDeposit accounting (sum sub + refund + count decrement), deposit cap, hookData encode
 - [ ] `scripts/01_deploy_batcher.ts` · `scripts/10_demo_deposits.ts` (setOperator → dual encryptInput → deposit ×3) · `scripts/11_close_settle.ts` (close → concurrent SDK `publicDecrypt(encSum)` + `publicDecrypt(unwrapRequestId)` → settle)
 - [ ] Testnet micro-epoch, burn flagged off: revealed A == known Σ, unwrap finalized, USDC balance delta == A
@@ -134,7 +134,7 @@ With the real SDK, build dst-chain (421614) inputs; `hookData = abi.encode(uint2
 **Objective:** first cross-chain mint with intact hookData. Depends on: Phase 2.
 
 - [ ] Real `depositForBurnWithHook` enabled (maxFee from live Iris fees API, on-chain bound ≤ A/100)
-- [ ] `ManifoldDistributor.sol` (relayReceive + storage) + `CCTPMessageParser` complete; parser unit-tested against **real bytes captured in Phase 0e** (recorded live data, not mocks) incl. N=max and malformed-input fuzz (clean reverts leave the nonce unconsumed + message retryable)
+- [ ] `NoxusDistributor.sol` (relayReceive + storage) + `CCTPMessageParser` complete; parser unit-tested against **real bytes captured in Phase 0e** (recorded live data, not mocks) incl. N=max and malformed-input fuzz (clean reverts leave the nonce unconsumed + message retryable)
 - [ ] `scripts/02_deploy_distributor.ts` · `scripts/03_wire.ts` (peers + staticcall sanity) · `scripts/12_relay_mint.ts` — **relay loop: poll Iris → relay immediately on `complete`; detect expiry (per 0d pin) → re-attest → retry** (expirationBlock@196 makes prompt relay a correctness matter)
 - [ ] destinationCaller = Distributor verified: direct `receiveMessage` from EOA reverts; `relayReceive` from any EOA succeeds
 - [ ] Fund fee-subsidy buffers (~1 USDC plain USDC each side, §3.3)
@@ -170,11 +170,11 @@ With the real SDK, build dst-chain (421614) inputs; `hookData = abi.encode(uint2
 
 Recon (2026-07-12): Vite 7 + React 19 JS SPA in `frontend/`; plain CSS; wagmi v3 + viem v2 (custom ConnectButton, injected connector); react-query; react-router; routes `/` (BridgeWidget), `/resources`, `/team` (ProfileCards skar88 + Aiden); WebGL backgrounds (ogl/gsap); chain layer = classic `iexec` SDK, Arb Sepolia only; addresses in `src/config/contracts.js`; optional `FALLBACK_API` backend. **No LICENSE file.**
 
-- [ ] Port shell: copy `frontend/`, rebrand Manifold; **TeamPage keeps only the Aiden card**; fix doubled `css/css`/`fonts/fonts` paths; stay JS
+- [ ] Port shell: copy `frontend/`, rebrand Noxus; **TeamPage keeps only the Aiden card**; fix doubled `css/css`/`fonts/fonts` paths; stay JS
 - [ ] Rip out classic-iExec layer (`iexec` SDK, orderbook/TEE-task code, `FALLBACK_API` path) → `@iexec-nox/handle` (`createViemHandleClient`) + wagmi calls; dual-chain config (ETH Sep + Arb Sep, switch prompts)
 - [ ] Views: **Deposit** (BridgeWidget refit: balance pre-check (client-decrypt own cUSDC — blocks the innocent zero-transfer case) → `setOperator` → dual `encryptInput` → `deposit`) · **Epoch dashboard** (state, count, history; direct RPC primary, subgraph for history per R6) · **Decrypt-my-balance** · **Auditor** (grant `addViewer` → auditor decrypts one amount → `removeViewer`, on screen)
 - [ ] **Keeper control panel (Q2: everything visible with proof):** buttons close → settle → relay → finalize (+ fallback controls), each showing live status: tx hash → explorer link, Iris state, KMS-proof fetched/verified indicators, revealed A, check result. CLI scripts remain the rehearsed instant fallback (R11)
-- [ ] Compliance hygiene: record HyperSecret authors' written consent for shell reuse (no LICENSE — all-rights-reserved by default; user appears to be co-author — confirm) + credit in README ("frontend shell adapted from our earlier HyperSecret UI; all Manifold logic new"); Discord Q2 already asks for confirmation
+- [ ] Compliance hygiene: record HyperSecret authors' written consent for shell reuse (no LICENSE — all-rights-reserved by default; user appears to be co-author — confirm) + credit in README ("frontend shell adapted from our earlier HyperSecret UI; all Noxus logic new"); Discord Q2 already asks for confirmation
 - [ ] Manual walkthrough on a live epoch, auditor flow from the UI
 
 **Commands:** `pnpm dev` / `pnpm build` in `frontend/`. **Exit:** four views + keeper panel drive a live epoch start-to-finish from the UI; DoD ③.
@@ -184,7 +184,7 @@ Recon (2026-07-12): Vite 7 + React 19 JS SPA in `frontend/`; plain CSS; wagmi v3
 **Objective:** amendments, feedback, rehearsals, recording, submission. Depends on: Phase 6.
 
 - [ ] README prose amendments per §1 list (quoted, flagged; §5 safety items already landed Day 0); decision-log rows D-007…D-011 appended (drafted in §7 below); D-004 row cross-annotated ("'self-exposing' superseded by D-010: exposure by attribution")
-- [ ] `feedback.md` finalized from worklog candidates (S0–S3 already hold: docs 🚧 banner · starter 404 vs brief link · Hello-World-vs-brief chain mismatch · plugin template · stale "upcoming release" note · handle-layout docs mismatch · docs domain migration · Networks page data client-side-only · plus new)
+- [ ] `feedback.md` finalized from worklog candidates (S0–S3 already hold: docs  banner · starter 404 vs brief link · Hello-World-vs-brief chain mismatch · plugin template · stale "upcoming release" note · handle-layout docs mismatch · docs domain migration · Networks page data client-side-only · plus new)
 - [ ] All contracts explorer-verified; `.env` hygiene audit; pre-demo check script: keeper gas both chains + **fee-buffer USDC levels both contracts** (also a pre-flight in keeper finalize/refund scripts — "anyone can top up" is the recovery)
 - [ ] 2 dress rehearsals (one pulled earlier into Phase 6 exit if schedule allows); record on green-status day (float Jul 30–31); X draft @iEx_ec; submit per Discord-confirmed venue
 
@@ -205,7 +205,7 @@ Recon (2026-07-12): Vite 7 + React 19 JS SPA in `frontend/`; plain CSS; wagmi v3
 - **k-floor honesty (documented in README amendment):** `minDepositors` is a heuristic floor valid against honest-but-curious observers; adversarial co-depositors (incl. zero-value sybils) can thin the real anonymity set — inherent to any open batcher, mitigated only by organic volume
 - Complexity named and dropped: multi-epoch concurrent Batcher (sequential suffices; Distributor is per-epoch-keyed — exactly what lets demo epoch #1 pre-run, #2 live) · cheater bisection (D-004) · slashing bonds (D-004) · admin sweep · pausability/admin roles · Circle `sendMessage` plaintext side-channel · relayReceive store-raw/parse-split (parse is over a self-authored, fixture-tested format; a deterministic parse revert leaves the nonce unconsumed and message re-attestable — split adds a tx + state for no working escape, residual logged in R4)
 
-### 3.1 ManifoldBatcher.sol (ETH Sepolia)
+### 3.1 NoxusBatcher.sol (ETH Sepolia)
 
 **Epoch state machine:** `Open → Closed → Settled (→ Refunded)`. One active epoch; `settleEpoch` opens e+1. (If Phase-1 contradicts the fresh-handle wrapper finding, insert `Settling` for the two-sequential-RTT variant; D-007 records which shipped.)
 
@@ -230,7 +230,7 @@ Keeper settle step fetches `publicDecrypt(encSum)` + `publicDecrypt(unwrapReques
 
 **Events:** `Deposited(epochId, depositor, dstRecipient, index)` (linkage public by calldata — confidentiality-not-anonymity) · `DepositWithdrawn(epochId, index)` · `EpochClosed(epochId, depositorCount)` · `EpochSettled(epochId, aggregate)` (public via burn) · `EpochRefunded(epochId)`. No per-user amounts anywhere.
 
-### 3.2 ManifoldDistributor.sol (Arb Sepolia)
+### 3.2 NoxusDistributor.sol (Arb Sepolia)
 
 **Per-epoch state machine:** `∅ → Received → (ingesting) → ClaimsIngested → CheckPending → Distributed | FallbackAttribution → RefundInitiated` (terminal-on-success; see expiration note). Fallback entries: failed check · `declareFallback` (any claim Invalid — plaintext fact) · `forceFallback` (timeout, widened guard).
 
@@ -260,7 +260,7 @@ Immutables: `dstWrapper`, `usdc`, `messageTransmitterV2`, `tokenMessengerV2`, `r
 Fast Transfer mints `A − feeExecuted`; check + distribution are denominated in A. Both contracts hold a **fee-subsidy buffer** (~1 USDC plain testnet USDC at deploy — explicit operational subsidy, not mock data): Distributor needs `balance ≥ A` at finalize AND at initiateRefund; Batcher at relayRefund (`wrap(A)` after receiving A − feeRefund). **Every fallback epoch permanently drains ~2 fees from the buffers; if the Distributor buffer < feeIn, BOTH exits freeze until top-up** — buffer levels are in the pre-demo check script + keeper pre-flight; anyone can top up (recovery). Pro-rata fee deduction from recipients needs plaintext per-claim math — impossible confidentially; dropped.
 
 ### 3.4 Wrapper deployment parameters
-One official `ERC20ToERC7984Wrapper` instance per chain (deploying instances is the intended use per README §4 — G1 bars touching CCTP/NoxCompute, not this): ETH Sep underlying `0x1c7D…7238`, Arb Sep `0x75fa…AA4d`; "Manifold Confidential USDC" / "cUSDC" (Q4). Exact constructor pinned from installed 0.2.2 source in Phase 1 (G10).
+One official `ERC20ToERC7984Wrapper` instance per chain (deploying instances is the intended use per README §4 — G1 bars touching CCTP/NoxCompute, not this): ETH Sep underlying `0x1c7D…7238`, Arb Sep `0x75fa…AA4d`; "Noxus Confidential USDC" / "cUSDC" (Q4). Exact constructor pinned from installed 0.2.2 source in Phase 1 (G10).
 
 ### 3.5 Decisions (flagged per §12; D-001…D-006 uncontradicted; D-010/D-011 amend §5/§3 prose)
 - **D-007:** co-initiated dual-proof settle — one wall-clock KMS RTT (`closeEpoch` grants SITE 1 + starts wrapper unwrap; `settleEpoch` verifies both proofs + requires balance-delta == A). Basis: wrapper source verified 2026-07-12 (fresh-handle internal reveal). Alternatives: two sequential RTTs (fallback variant, +`Settling` state); plaintext-unwrap W3 (contradicted by source).
@@ -308,7 +308,7 @@ One official `ERC20ToERC7984Wrapper` instance per chain (deploying instances is 
 | R8 | Keeper key/gas management | script failures; drained/nonce-stuck account | Two funded accounts Day 0; pre-demo balance+buffer check; idempotent resumable steps; any EOA substitutes (permissionless) |
 | R9 | Epoch stuck: KMS proof never arrives / buffers empty | `Closed`/`CheckPending` > timeout; buffer < fee | Dst: widened `forceFallback` → refund (no Nox needed). Src `Closed`: wait+retry only (accepted, documented; small demo amounts). Buffer freeze: anyone tops up (keeper pre-flight warns) |
 | R10 | Prior-art collision | Discord Q2 reveals similar prior project | §11 claim wording already narrow; differentiate in related-work; re-angle pitch (integrity check + refund leg are novel) |
-| R11 | Frontend port liabilities (HyperSecret) | license question; recycled-UI optics; UI keeper step fails on camera | No LICENSE upstream → record authors' written consent (user appears to be co-author — confirm) + README credit + provenance disclosure ("all Manifold logic new"); Discord Q2 asks explicitly; CLI fallback rehearsed for every keeper step |
+| R11 | Frontend port liabilities (HyperSecret) | license question; recycled-UI optics; UI keeper step fails on camera | No LICENSE upstream → record authors' written consent (user appears to be co-author — confirm) + README credit + provenance disclosure ("all Noxus logic new"); Discord Q2 asks explicitly; CLI fallback rehearsed for every keeper step |
 | R12 | Gas-only fallback-forcing griefer | repeated `check == 0` epochs w/ zero-value deposits | By design post-critique: opt-in reveal removes deanonymization payoff; refund makes everyone whole; cost to us = fee-buffer drain (monitored) + nuisance; k-floor documented as heuristic; organic-volume mitigation only (bonds stay dropped per D-004) |
 
 ---
@@ -324,7 +324,7 @@ One official `ERC20ToERC7984Wrapper` instance per chain (deploying instances is 
 | 4 | E2E no mock data (honest) | **①** |
 | 5 | — | **②** |
 | 6 | functional frontend | **③** |
-| 7 | repo complete · README amended · **feedback.md (⭐⭐)** · video ≤ 4 min · X @iEx_ec · team ≤ 5 | **④** (verified, no per-user amount findable) · **⑤** |
+| 7 | repo complete · README amended · **feedback.md ()** · video ≤ 4 min · X @iEx_ec · team ≤ 5 | **④** (verified, no per-user amount findable) · **⑤** |
 
 **feedback.md schedule:** created at commit #1 with the eight existing candidates (S0–S3); appended immediately on friction (G9); Phase 7 prose pass.
 
@@ -380,7 +380,7 @@ All future sessions follow §12 protocol: ① read §7 + STATE + last 2 worklog 
 ## 8. Questions for the human
 
 Asked interactively 2026-07-12 — answers recorded:
-1. **Frontend stack** → **port `skar8848/HyperSecret-hack4privacy` exactly, adapted to Manifold; team page keeps only the Aiden card.** (Its stack — Vite+React+wagmi/viem — matches the original recommendation; port replaces its classic-iExec layer with the Nox handle SDK. Recon in Phase 6; liabilities in R11.)
+1. **Frontend stack** → **port `skar8848/HyperSecret-hack4privacy` exactly, adapted to Noxus; team page keeps only the Aiden card.** (Its stack — Vite+React+wagmi/viem — matches the original recommendation; port replaces its classic-iExec layer with the Nox handle SDK. Recon in Phase 6; liabilities in R11.)
 2. **Keeper** → **everything visible and driven via the frontend, with on-screen proof per step.** Phase 6 keeper panel (tx links, Iris state, KMS-proof indicators, check result); CLI stays as rehearsed fallback.
 3. **Demo amounts** → **3.10 / 2.45 / 4.45 → A = 10.00 USDC** per epoch (~60 USDC total incl. rehearsals — fine with faucet banking).
 4. **Naming + rename** → **keep spec names; rename to `README.md` at commit #1.**

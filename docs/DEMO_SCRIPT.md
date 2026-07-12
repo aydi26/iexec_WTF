@@ -1,4 +1,4 @@
-# Manifold — Demo Video Shooting Script (≤ 4 min)
+# Noxus — Demo Video Shooting Script (≤ 4 min)
 
 > **Confidential cross-chain USDC settlement over unmodified Circle CCTP V2, with iExec Nox as the privacy layer.**
 > Individual deposit amounts never touch the blockchain; one public aggregate bridges; an on-chain, TEE-verified integrity check gates confidential distribution — and makes cheating detectable, unprofitable, and self-exposing.
@@ -30,12 +30,12 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 
 ## Tabs to have staged (left-to-right in the browser)
 1. Etherscan — a real public CCTP burn (opening hook)
-2. Etherscan — the three deposit txs on `ManifoldBatcher` (source leg)
-3. Etherscan — `ManifoldBatcher` `EpochSettled` / the CCTP burn tx
+2. Etherscan — the three deposit txs on `NoxusBatcher` (source leg)
+3. Etherscan — `NoxusBatcher` `EpochSettled` / the CCTP burn tx
 4. Circle CCTP explorer / Iris status for the bridge message
 5. Arbiscan — `<DISTRIBUTOR>` epoch, the integrity-check `finalizeEpoch` proof tx
-6. Manifold frontend — recipient's **decrypt-my-balance** view
-7. Manifold frontend — **auditor** view (grant viewer + decrypt one amount)
+6. Noxus frontend — recipient's **decrypt-my-balance** view
+7. Noxus frontend — **auditor** view (grant viewer + decrypt one amount)
 
 > **Live addresses (as recorded):** ETH Sep cUSDC `0xe195B0396B973C548178Eeb64DC20b9dd9B8406a`, Batcher `0x2b4ad72de1789246f64A01063b3CE0900919a67D`; Arb Sep cUSDC `0x8ECc0b570536Ff5F9710E04880A0f23455d608d5`, Distributor `<DISTRIBUTOR>` (may be redeployed — read the placeholder from `deployments/421614.json` before shooting; do not hardcode).
 
@@ -48,13 +48,13 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 - **Presenter:** "Every treasury move over Circle's CCTP is public. Here's a real burn — anyone on Etherscan sees exactly how much, and when. Coinbase, Kraken, payroll processors all bridge this way, broadcasting position sizes and timing."
 - **Tab:** Etherscan (public burn).
 
-### 0:20 — 0:35 · What Manifold changes
-- **On screen:** Title card — "Manifold: confidential cross-chain USDC over unmodified CCTP V2 · iExec Nox privacy layer." Small architecture strip: ETH Sepolia → CCTP V2 → Arb Sepolia.
-- **Presenter:** "Manifold makes individual amounts **never exist on-chain** — while the aggregate stays fully auditable. Real, unmodified CCTP V2. iExec Nox for confidentiality. And it's confidentiality, not anonymity — not a mixer."
+### 0:20 — 0:35 · What Noxus changes
+- **On screen:** Title card — "Noxus: confidential cross-chain USDC over unmodified CCTP V2 · iExec Nox privacy layer." Small architecture strip: ETH Sepolia → CCTP V2 → Arb Sepolia.
+- **Presenter:** "Noxus makes individual amounts **never exist on-chain** — while the aggregate stays fully auditable. Real, unmodified CCTP V2. iExec Nox for confidentiality. And it's confidentiality, not anonymity — not a mixer."
 - **Tab:** Title card / slide.
 
 ### 0:35 — 1:15 · Three hidden-amount deposits (the core reveal)
-- **On screen:** Tab 2 — three deposit txs to `ManifoldBatcher` shown **side-by-side** on Etherscan. Each tx **exists** (from-address, timestamp, `Deposited` event visible), but **no amount** appears anywhere — calldata carries encrypted handles, not numbers.
+- **On screen:** Tab 2 — three deposit txs to `NoxusBatcher` shown **side-by-side** on Etherscan. Each tx **exists** (from-address, timestamp, `Deposited` event visible), but **no amount** appears anywhere — calldata carries encrypted handles, not numbers.
 - **Presenter:** "Three people deposit — 0.10, 0.15, 0.20 — but watch Etherscan. The transactions are right there, participants visible, and yet **not a single amount is on-chain**. The values are ERC-7984 encrypted handles, summed homomorphically inside the contract into one encrypted total."
 - **Note:** Also show — in one line — that each depositor **pre-registers their destination claim on Arbitrum** (option B): "Each depositor also registers an encrypted claim on the destination chain in their own transaction — that's what lets us verify integrity later."
 - **Tab:** Etherscan (3 deposits, side-by-side).
@@ -77,7 +77,7 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 - **Tab:** Arbiscan (`finalizeEpoch` proof tx).
 
 ### 2:35 — 3:00 · Confidential distribution + recipient decrypts own balance
-- **On screen:** Tab 6 — the Manifold frontend, logged in as one recipient. Their confidential cUSDC balance is an encrypted handle; they click **Decrypt my balance** and their own amount appears **only to them**.
+- **On screen:** Tab 6 — the Noxus frontend, logged in as one recipient. Their confidential cUSDC balance is an encrypted handle; they click **Decrypt my balance** and their own amount appears **only to them**.
 - **Presenter:** "Distribution is confidential — each recipient is credited, amounts hidden from everyone. Only the recipient, with their own key, decrypts their own balance. Everyone else sees participants but no numbers."
 - **Editing note:** client-decrypt is a KMS RTT too; pre-fetch during the prior narration if needed, or cut on the click.
 - **Tab:** Frontend (decrypt-my-balance).
@@ -96,7 +96,7 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 
 ### 3:40 — 3:45 · Close: repo + tag
 - **On screen:** Repo link `[REPO_LINK]` and `@iEx_ec`, with the claim line on screen.
-- **Presenter:** "Manifold — the first amount-confidential CCTP settlement via TEE batching with verifiable integrity. Repo's linked. Thanks, **@iEx_ec**."
+- **Presenter:** "Noxus — the first amount-confidential CCTP settlement via TEE batching with verifiable integrity. Repo's linked. Thanks, **@iEx_ec**."
 - **Tab:** End card (repo + tag).
 
 ---

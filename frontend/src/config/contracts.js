@@ -1,25 +1,25 @@
 // ============================================================================
-// Manifold — deployed addresses + ABIs
+// Noxus — deployed addresses + ABIs
 // ----------------------------------------------------------------------------
 // Confidential cross-chain USDC settlement over Circle CCTP V2 + iExec Nox.
-//   Source leg:      ETH Sepolia  (11155111) — ManifoldBatcher + ManifoldCUSDC
-//   Destination leg: Arb Sepolia  (421614)   — ManifoldDistributor + ManifoldCUSDC
+//   Source leg:      ETH Sepolia  (11155111) — NoxusBatcher + NoxusCUSDC
+//   Destination leg: Arb Sepolia  (421614)   — NoxusDistributor + NoxusCUSDC
 //
 // Addresses are read from the repo's deployments/<chainId>.json (copied into
 // src/deployments during the build). We read *defensively*: the 421614 file and
-// the ManifoldDistributor may not exist yet, so everything falls back gracefully
+// the NoxusDistributor may not exist yet, so everything falls back gracefully
 // with a clearly-marked TODO for the contracts team to wire.
 // ============================================================================
 
 import { sepolia, arbitrumSepolia } from "viem/chains";
 
-import ManifoldBatcherAbi from "../abis/ManifoldBatcher.json";
-import ManifoldCUSDCAbi from "../abis/ManifoldCUSDC.json";
-// TODO(contracts): ManifoldDistributor ABI does not exist yet. This is a
-// clearly-marked placeholder. Replace s../abis/ManifoldDistributor.json
-// with the real compiled ABI (artifacts/contracts/ManifoldDistributor.sol/…json)
+import NoxusBatcherAbi from "../abis/NoxusBatcher.json";
+import NoxusCUSDCAbi from "../abis/NoxusCUSDC.json";
+// TODO(contracts): NoxusDistributor ABI does not exist yet. This is a
+// clearly-marked placeholder. Replace s../abis/NoxusDistributor.json
+// with the real compiled ABI (artifacts/contracts/NoxusDistributor.sol/…json)
 // once the destination-leg contract is deployed, and re-point this import.
-import ManifoldDistributorAbi from "../abis/ManifoldDistributor.json";
+import NoxusDistributorAbi from "../abis/NoxusDistributor.json";
 
 // Deployment manifests copied from repo root /deployments.
 import sepoliaDeployment from "../deployments/11155111.json";
@@ -51,21 +51,21 @@ const pick = (obj, ...keys) => {
 
 export const ADDRESSES = {
   [CHAIN_IDS.SOURCE]: {
-    ManifoldBatcher: pick(sepoliaDeployment, "ManifoldBatcher"),
-    ManifoldCUSDC: pick(sepoliaDeployment, "ManifoldCUSDC"),
+    NoxusBatcher: pick(sepoliaDeployment, "NoxusBatcher"),
+    NoxusCUSDC: pick(sepoliaDeployment, "NoxusCUSDC"),
   },
   [CHAIN_IDS.DEST]: {
     // TODO(contracts): populate from deployments/421614.json once it exists.
-    ManifoldDistributor: pick(arbSepoliaDeployment, "ManifoldDistributor"),
-    ManifoldCUSDC: pick(arbSepoliaDeployment, "ManifoldCUSDC"),
+    NoxusDistributor: pick(arbSepoliaDeployment, "NoxusDistributor"),
+    NoxusCUSDC: pick(arbSepoliaDeployment, "NoxusCUSDC"),
   },
 };
 
 // Convenience source-leg exports (most views run on ETH Sepolia).
-export const BATCHER_ADDRESS = ADDRESSES[CHAIN_IDS.SOURCE].ManifoldBatcher;
-export const CUSDC_ADDRESS = ADDRESSES[CHAIN_IDS.SOURCE].ManifoldCUSDC;
+export const BATCHER_ADDRESS = ADDRESSES[CHAIN_IDS.SOURCE].NoxusBatcher;
+export const CUSDC_ADDRESS = ADDRESSES[CHAIN_IDS.SOURCE].NoxusCUSDC;
 export const DISTRIBUTOR_ADDRESS =
-  ADDRESSES[CHAIN_IDS.DEST].ManifoldDistributor; // may be undefined (TODO)
+  ADDRESSES[CHAIN_IDS.DEST].NoxusDistributor; // may be undefined (TODO)
 
 export const CUSDC_DECIMALS = 6; // amounts entered/displayed in USDC (6 decimals)
 
@@ -75,10 +75,10 @@ export const FAR_FUTURE_EXPIRY = 281474976710655n; // 2^48 - 1
 // ---------------------------------------------------------------------------
 // ABIs
 // ---------------------------------------------------------------------------
-export const BATCHER_ABI = ManifoldBatcherAbi;
-export const CUSDC_ABI = ManifoldCUSDCAbi;
+export const BATCHER_ABI = NoxusBatcherAbi;
+export const CUSDC_ABI = NoxusCUSDCAbi;
 // TODO(contracts): placeholder — see import note above.
-export const DISTRIBUTOR_ABI = ManifoldDistributorAbi;
+export const DISTRIBUTOR_ABI = NoxusDistributorAbi;
 
 // Minimal ERC-20 ABI (approve/allowance/balanceOf on the underlying USDC).
 export const ERC20_ABI = [
@@ -132,7 +132,7 @@ export const txUrl = (chainId, hash) =>
 export const addressUrl = (chainId, addr) =>
   `${EXPLORERS[chainId] || EXPLORERS[CHAIN_IDS.SOURCE]}/address/${addr}`;
 
-// Epoch state enum (matches ManifoldBatcher.epochInfo() -> state uint8).
+// Epoch state enum (matches NoxusBatcher.epochInfo() -> state uint8).
 export const EPOCH_STATE = {
   0: "Open",
   1: "Closed",
@@ -140,17 +140,5 @@ export const EPOCH_STATE = {
   3: "Refunded",
 };
 
-// ---------------------------------------------------------------------------
-// Compatibility shims for the ported HyperSecret BridgeWidget imports. The
-// classic-iExec/Hyperliquid path is disabled (aliased to a stub in vite.config);
-// these map the widget's expected names onto Manifold's source-leg contracts so
-// the UI renders. Full Manifold deposit wiring lives in the deposit handler.
-// ---------------------------------------------------------------------------
-export const VAULT_ADDRESS = BATCHER_ADDRESS;
-export const VAULT_ABI = BATCHER_ABI;
-export const IAPP_ADDRESS = "";
-export const IEXEC_HUB_ADDRESS = "";
-export const FALLBACK_API = "";
-export { USDC } from "./_usdc.js";
-
-export { USDC_ADDRESS } from "./_usdc.js";
+// USDC (underlying) on the source chain (ETH Sepolia).
+export const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";

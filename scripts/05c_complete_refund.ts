@@ -17,8 +17,8 @@ async function main() {
   const refundTx = process.argv[3];
   if (!refundTx) throw new Error("pass the initiateRefund tx hash");
 
-  const batcherAddr = deployments(11155111).ManifoldBatcher;
-  const batcher = new Contract(batcherAddr, artifact("ManifoldBatcher").abi, eth.wallet);
+  const batcherAddr = deployments(11155111).NoxusBatcher;
+  const batcher = new Contract(batcherAddr, artifact("NoxusBatcher").abi, eth.wallet);
   const usdc = new Contract((ADDR.USDC as any)[11155111], USDC_ABI, eth.wallet);
 
   // plain-USDC buffer so wrap(A) succeeds despite the inbound refund fee

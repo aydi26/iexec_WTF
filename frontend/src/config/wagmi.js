@@ -1,5 +1,5 @@
 // ============================================================================
-// wagmi dual-chain config — Manifold
+// wagmi dual-chain config — Noxus
 //   Source leg:      ETH Sepolia  (11155111)
 //   Destination leg: Arb Sepolia  (421614)
 // injected() connector + multiInjectedProviderDiscovery for EIP-6963 wallets.
