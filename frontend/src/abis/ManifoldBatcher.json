@@ -17,6 +17,11 @@
         "type": "address"
       },
       {
+        "internalType": "contract IMessageTransmitterV2",
+        "name": "_messageTransmitter",
+        "type": "address"
+      },
+      {
         "internalType": "uint32",
         "name": "_dstDomain",
         "type": "uint32"
@@ -465,6 +470,19 @@
   },
   {
     "inputs": [],
+    "name": "messageTransmitter",
+    "outputs": [
+      {
+        "internalType": "contract IMessageTransmitterV2",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "minDepositors",
     "outputs": [
       {
@@ -474,6 +492,29 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "attestation",
+        "type": "bytes"
+      }
+    ],
+    "name": "relayRefund",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

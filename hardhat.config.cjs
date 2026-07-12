@@ -1,4 +1,5 @@
 require("@nomicfoundation/hardhat-ethers");
+require("@nomicfoundation/hardhat-verify");
 require("dotenv").config();
 
 const { DEPLOYER_PRIVATE_KEY, ETH_SEPOLIA_RPC_URL, ARB_SEPOLIA_RPC_URL } = process.env;
@@ -17,4 +18,7 @@ module.exports = {
     ethSepolia: { url: ETH_SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com", accounts, chainId: 11155111 },
     arbSepolia: { url: ARB_SEPOLIA_RPC_URL || "https://arbitrum-sepolia-rpc.publicnode.com", accounts, chainId: 421614 },
   },
+  // Keyless on-chain source verification via Sourcify (no explorer API key needed).
+  sourcify: { enabled: true },
+  etherscan: { enabled: false },
 };

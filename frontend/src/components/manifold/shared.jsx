@@ -1,4 +1,5 @@
 // Shared UI primitives for the Manifold views.
+import { useState, useCallback } from "react";
 import { useAccount, useChainId, useConnect, useSwitchChain } from "wagmi";
 import { EPOCH_STATE, txUrl } from "../../config/contracts";
 
@@ -103,6 +104,79 @@ export function TxStatus({ label, hash, isPending, isConfirming, isSuccess, isEr
       {error && <div className="mf-error" style={{ marginTop: 8 }}>{error}</div>}
     </div>
   );
+}
+
+/**
+ * Small state machine for a single on-chain action: hash + phase + error, plus a
+ * `run(fn)` that executes an async write returning a tx hash and (optionally)
+ * waits for the receipt. Views get consistent pending/confirming/success states
+ * and a clickable explorer link for free (feed the returned object to <TxStatus/>).
+ */
+export function useTxAction(chainId) {
+  const [state, setState] = useState({
+    hash: undefined,
+    isPending: false,
+    isConfirming: false,
+    isSuccess: false,
+    isError: false,
+    error: null,
+  });
+
+  const reset = useCallback(
+    () =>
+      setState({
+        hash: undefined,
+        isPending: false,
+        isConfirming: false,
+        isSuccess: false,
+        isError: false,
+        error: null,
+      }),
+    []
+  );
+
+  /**
+   * @param {() => Promise<`0x${string}`>} send - fires the write, resolves to a tx hash.
+   * @param {{ wait?: (hash) => Promise<any> }} [opts] - optional receipt waiter.
+   */
+  const run = useCallback(async (send, opts = {}) => {
+    setState({
+      hash: undefined,
+      isPending: true,
+      isConfirming: false,
+      isSuccess: false,
+      isError: false,
+      error: null,
+    });
+    try {
+      const hash = await send();
+      setState((s) => ({ ...s, hash, isPending: false, isConfirming: !!opts.wait }));
+      if (opts.wait) {
+        const receipt = await opts.wait(hash);
+        const reverted = receipt && receipt.status === "reverted";
+        setState((s) => ({
+          ...s,
+          isConfirming: false,
+          isSuccess: !reverted,
+          isError: !!reverted,
+          error: reverted ? "Transaction reverted on-chain." : null,
+        }));
+      }
+      return hash;
+    } catch (err) {
+      const msg = err?.shortMessage || err?.message || "Transaction failed";
+      setState((s) => ({
+        ...s,
+        isPending: false,
+        isConfirming: false,
+        isError: true,
+        error: msg.slice(0, 220),
+      }));
+      throw err;
+    }
+  }, []);
+
+  return { ...state, chainId, run, reset };
 }
 
 /** Epoch state -> label + badge class. */

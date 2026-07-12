@@ -16,7 +16,7 @@ const CUSDC_ABI = [
   "function wrap(address to, uint256 amount) returns (bytes32)",
   "function confidentialBalanceOf(address) view returns (bytes32)",
 ];
-const USDC_ABI = ["function approve(address,uint256) returns (bool)", "function allowance(address,address) view returns (uint256)"];
+const USDC_ABI = ["function approve(address,uint256) returns (bool)", "function allowance(address,address) view returns (uint256)", "function transfer(address,uint256) returns (bool)"];
 
 async function main() {
   const eth = connect(CHAINS.eth);
@@ -41,11 +41,13 @@ async function main() {
 
   // pre-fund cUSDC for deposits + a small cUSDC buffer to the Batcher (covers the refund-leg fee)
   const wrapAmt = 500_000n;
-  if ((await ethUsdc.allowance(me, ethCusdcAddr)) < wrapAmt + 20_000n) await (await ethUsdc.approve(ethCusdcAddr, wrapAmt + 20_000n)).wait();
+  if ((await ethUsdc.allowance(me, ethCusdcAddr)) < wrapAmt) await (await ethUsdc.approve(ethCusdcAddr, wrapAmt)).wait();
   await (await cusdc.wrap(me, wrapAmt)).wait();
-  await (await cusdc.wrap(batcherAddr, 20_000n)).wait(); // Batcher refund fee buffer (0.02 cUSDC)
+  // Batcher needs a small PLAIN-USDC buffer to cover the refund-leg fee (relayRefund
+  // wraps the full aggregate A, which pulls plain USDC; the mint delivers A - fee).
+  await (await ethUsdc.transfer(batcherAddr, 100_000n)).wait();
   if (!(await cusdc.isOperator(me, batcherAddr))) await (await cusdc.setOperator(batcherAddr, 2n ** 47n)).wait();
-  console.log("pre-funded cUSDC + Batcher buffer + setOperator");
+  console.log("pre-funded cUSDC + Batcher USDC buffer + setOperator");
 
   for (let i = 0; i < 3; i++) {
     const dstEnc = await arbH.encryptInput(dst[i], "uint256", distAddr as `0x${string}`);

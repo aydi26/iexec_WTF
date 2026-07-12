@@ -37,7 +37,7 @@ sequenceDiagram
     alt check true
         D->>U: confidential cUSDC credit per recipient (amounts hidden)
     else check false
-        D->>D: epoch flagged → fallback reveal-to-claim (cheater exposed)
+        D->>D: epoch flagged → opt-in attribution reveal + refund-to-source (Arb→ETH); cheater exposed by Σ≠A
     end
 ```
 
@@ -66,7 +66,7 @@ ebool check = Nox.eq(encTotal, Nox.toEuint256(mintedAggregate));
 Nox.allowPublicDecryption(check);            // keeper fetches KMS proof off-chain
 // tx2: Nox.publicDecrypt(check, proof) → bool
 ```
-`true` → confidential distribution (honest equilibrium). `false` → epoch flagged, **fallback reveal-to-claim**: each depositor decrypts client-side and claims their attested source amount; the cheater cannot claim more than attested and is exposed; honest users lose privacy for that epoch only. Cheating is detectable, unprofitable, self-exposing. The reveal pattern itself is iExec's own (`ERC20ToERC7984Wrapper.finalizeUnwrap`) — extended, not invented.
+`true` → confidential distribution (honest equilibrium). `false` → epoch flagged, **fallback = opt-in attribution reveal + refund-to-source** (D-010, verified live): each recipient may reveal their *own* destination claim (`requestClaimReveal`) — the published claims expose Σ≠A and pin the inconsistency; then the aggregate A is bridged **back** to the Batcher (reverse CCTP leg) and every depositor is confidentially re-credited their **attested source amount**. The cheater literally cannot claim more than they deposited (payout is driven by source data), and honest depositors' amounts stay private unless they choose to reveal. Cheating is detectable, unprofitable, self-exposing; the refund needs zero Nox/KMS availability to move funds. The reveal pattern itself is iExec's own (`ERC20ToERC7984Wrapper.finalizeUnwrap`) — extended, not invented.
 
 ## 4. Architecture
 
@@ -213,8 +213,8 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 - [x] Day-0 (S4): gateway/subgraph live probe ✓ · CCTP on-chain getters ✓ (maxMessageBodySize=8192 both chains, domains 0/3, Iris fast fee 1–1.3 bps) · repo bootstrapped + toolchain
 - [x] Day-0 (S5): **latency bench = GO-LIVE both chains** (ETH Sep prodRTT median 7.0s/p90 7.5s; Arb prodRTT 1.7s) · proof=137 B → hookData N=10 ≈ 3.3 KB ≪ 7964 B (inline fits on SIZE) · toolchain compiles (solc 0.8.35, Nox lib)
 - [ ] Day-0 remaining: **D-006** — inline fits on size but owner-binding (`ownerInProof==owner`, source-confirmed + positive bench) points to option B; confirm negative case (3rd-party submit reverts) in Phase 1 · 2 Discord confirmations (posted?)
-- [x] Wrappers ✅ (ETH+Arb deployed, live cycle verified) · [x] Batcher ✅ · [x] Settlement+CCTP ✅ (live burn→Iris→relayReceive both ways) · [x] Distributor ✅ · [x] Integrity+fallback ✅ (contracts done+deployed; honest E2E live, adversarial live run gas-blocked) · [~] Frontend (shell ported + builds; deposit-handler Manifold wiring pending) · [~] Auditor (grantAuditor done; add-only) · [x] **E2E no-mock: DoD ① honest path LIVE** · [ ] Video+feedback+X
-- **Live deployments:** ETH Sep — cUSDC `0xe195B0396B973C548178Eeb64DC20b9dd9B8406a`, Batcher `0x2b4ad72de1789246f64A01063b3CE0900919a67D` · Arb Sep — cUSDC `0x8ECc0b570536Ff5F9710E04880A0f23455d608d5`, Distributor `0xe6572c6b1586c4D317B0dB9AA409553a8b415b84`
+- [x] Wrappers ✅ · [x] Batcher ✅ · [x] Settlement+CCTP ✅ (live burn→Iris→relayReceive both directions) · [x] Distributor ✅ · [x] Integrity+fallback ✅ · [x] Frontend ✅ (HyperSecret shell + 5 Manifold views, builds) · [x] Auditor ✅ (grantAuditor; add-only) · [x] **E2E no-mock: DoD ① AND ② both LIVE** · [x] Contracts verified (Sourcify exact_match ×4) · [ ] Video+X post
+- **Live + Sourcify-verified deployments:** ETH Sep — cUSDC `0xe195B0396B973C548178Eeb64DC20b9dd9B8406a`, Batcher `0x92467950c381f9CfCd4D213Bf2D67d464C5266c4` · Arb Sep — cUSDC `0x8ECc0b570536Ff5F9710E04880A0f23455d608d5`, Distributor `0xb36F257a0535fF666fFa61af553898a67dF6d863`
 
 ### Decision Log
 | ID | Decision | Alternatives | Rationale | Date |
@@ -248,6 +248,13 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 **Done:** full rewrite for signal density (485 → ~230 lines): deduplicated Hooks/CCTP rows and the reveal-pattern explanation (now §6 only), merged setup+runbook, compressed worklog narratives to fact bullets, updated STATE, added D-006 placeholder and the 3-week plan. **No verified fact, address, guardrail, or open question was removed.**
 
 <!-- APPEND NEW SESSIONS BELOW THIS LINE -->
+
+#### Session 7 — 2026-07-12 — claude — DoD ② live + verification + frontend + docs (completion pass)
+**Done:** redeployed fresh contracts (clean epochs); ran BOTH E2E flows live; verified all 4 contracts on Sourcify; finished frontend; generated demo script + X draft. Fixed the refund fee-buffer (Batcher needs a small PLAIN-USDC buffer for the refund leg — `wrap(A)` pulls plain USDC; `05c_complete_refund.ts`).
+**Verified (LIVE, both testnets, 2026-07-12):** **DoD ② adversarial fallback+refund** — depositor #3 deposits 0.20 on source but pre-registers an inflated 0.99 dst claim → Σ(dst)=1.24 ≠ A=0.45 → **integrity check == 0** → fallback → opt-in attribution reveals exposed 0.10/0.15/**0.99** (cheat caught) → `initiateRefund` bridged A back (Arb→ETH) → `relayRefund` confidentially re-credited every depositor their ATTESTED source amount. **Cheater got 0.20, not 0.99.** · DoD ① reconfirmed on fresh contracts (check==1, recipient decrypts balance). · **All 4 contracts Sourcify exact_match** (cUSDC ×2, Batcher, Distributor). · `audit:privacy` PASS. · Frontend: HyperSecret shell + 5 Manifold views (Deposit/Epochs/Decrypt/Auditor/Keeper), `pnpm build` green. · Final addresses in STATE.
+**Open (needs you):** video ≤ 4 min + X post @iEx_ec (draft in `docs/X_POST.md`, shot list in `docs/DEMO_SCRIPT.md`); for the k-anon demo, 3 distinct depositor addresses + more USDC; optional Etherscan/Arbiscan API-key verification (Sourcify already covers source verification).
+**Next:** record + submit.
+**feedback.md candidates:** Sourcify V1 API is in a deprecation brownout (hardhat-verify@2 hits it) — had to POST the standard-JSON to the Sourcify V2 API directly; hardhat-verify@3 (V2) needs Hardhat 3.
 
 #### Session 6 — 2026-07-12 — claude — Phases 3–6: full cross-chain build + honest E2E live
 **Done:** `ManifoldDistributor.sol` (option B: `preRegister` + `relayReceive`/parse + `checkEpoch` + `finalizeEpoch` + fallback/`requestClaimReveal`/`resolveClaim`/`initiateRefund`/`forceFallback`); `ManifoldBatcher` extended with `relayRefund` + message transmitter; `CCTPMessageParser` lib + CCTP interfaces; cross-chain deploy/wire + Arb-USDC seed scripts; `04_honest_e2e.ts`, `05_fallback_e2e.ts`, `audit_privacy.ts`; frontend HyperSecret shell ported + rebranded + builds. Fixed: plain `confidentialTransfer` doesn't grant the caller the result handle → dropped the unauthorized `allow` (root-caused `UnauthorizedSender` from Nox ACL).

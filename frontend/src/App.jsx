@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { config } from "./config/wagmi";
 import ConnectButton from "./components/ConnectButton";
 import StaggeredMenu from "./components/StaggeredMenu";
-import BridgeWidget from "./components/BridgeWidget";
+import Manifold from "./components/Manifold";
 import ResourcesPage from "./components/ResourcesPage";
 import TeamPage from "./components/TeamPage";
 import Plasma from "./components/Plasma";
@@ -56,7 +56,7 @@ function AppContent() {
         {/* Main */}
         <main className={`app-main ${isFullWidth ? "top-align" : ""}`}>
           <Routes>
-            <Route path="/" element={<BridgeWidget />} />
+            <Route path="/" element={<Manifold />} />
             <Route path="/resources" element={<ResourcesPage />} />
             <Route path="/team" element={<TeamPage />} />
           </Routes>
