@@ -3,6 +3,13 @@
 //   deposit -> batch -> CCTP burn -> Iris relay -> integrity check ->
 //   confidential distribution, all driven from the wallet (no scripts).
 //
+// PRESENTATION ONLY: this view is re-skinned to mirror the HyperSecret
+// BridgeWidget aesthetic (From -> To route card + swap pill, a big amount
+// input card, a collapsible k=3 batch section, a horizontal step tracker,
+// and a success/status panel), recolored to the Noxus yellow accent. The
+// confidential orchestration is delegated UNCHANGED to runConfidentialBridge
+// in ../../lib/bridge.js.
+//
 // Chain switching: the flow crosses ETH Sepolia <-> Arb Sepolia several times.
 // We NEVER reuse a stale wallet client — `getWalletClient(config, { chainId })`
 // from wagmi/actions always returns a fresh client bound to the requested chain
@@ -22,24 +29,29 @@ import {
 import { parseUsdc, formatUsdc, isHex } from "./format";
 import { runConfidentialBridge } from "../../lib/bridge";
 import { LockIcon, shorten } from "./shared";
+import arbitrumSvg from "../../assets svg/1225_Arbitrum_Logomark_FullColor_ClearSpace.svg";
+import "./BridgeFlow.css";
 
 // The step tracker groups. `keys` are the stable onStep keys the runner emits.
+// `short` is the compact label shown on the horizontal phase rail.
 const STEP_GROUPS = [
-  { title: "Read epoch", keys: ["epoch"] },
+  { title: "Read epoch", short: "Epoch", keys: ["epoch"] },
   {
     title: "Pre-register on Arbitrum ×3",
+    short: "Pre-register",
     keys: ["switch-arb-pre", "prereg-0", "prereg-1", "prereg-2"],
   },
   {
     title: "Fund + deposit on Ethereum ×3",
+    short: "Deposit",
     keys: ["switch-eth", "fund", "deposit-0", "deposit-1", "deposit-2"],
   },
-  { title: "Close epoch", keys: ["close"] },
-  { title: "Settle + CCTP burn", keys: ["settle"] },
-  { title: "CCTP relay", keys: ["relay-attest", "switch-arb-relay", "relay"] },
-  { title: "Integrity check", keys: ["check"] },
-  { title: "Finalize + distribute", keys: ["finalize"] },
-  { title: "Done — decrypted balance", keys: ["done"] },
+  { title: "Close epoch", short: "Close", keys: ["close"] },
+  { title: "Settle + CCTP burn", short: "Settle + burn", keys: ["settle"] },
+  { title: "CCTP relay", short: "CCTP relay", keys: ["relay-attest", "switch-arb-relay", "relay"] },
+  { title: "Integrity check", short: "Integrity", keys: ["check"] },
+  { title: "Finalize + distribute", short: "Distribute", keys: ["finalize"] },
+  { title: "Done — decrypted balance", short: "Done", keys: ["done"] },
 ];
 
 // Human labels + which chain each step's tx-hash link points to.
@@ -64,8 +76,6 @@ const STEP_META = {
   done: { label: "Decrypt recipient balance", chainId: CHAIN_IDS.DEST },
 };
 
-const ALL_KEYS = STEP_GROUPS.flatMap((g) => g.keys);
-
 // Row scaffold: row 1 = your transfer, rows 2-3 = editable batch fillers.
 // `recipient` is left blank by default so the connected address can be used as
 // both placeholder and fallback (derived at render time — no effect needed).
@@ -75,14 +85,62 @@ const DEFAULT_ROWS = [
   { recipient: "", amount: "0.05", label: "Batch filler (editable)" },
 ];
 
-function StepIcon({ status }) {
-  if (status === "done")
-    return <span className="mf-step-num" style={{ background: "rgba(245,214,75,0.14)", color: "#F5D64B" }}>✓</span>;
-  if (status === "active")
-    return <span className="mf-step-num" style={{ background: "#F5D64B", color: "#000" }}><span className="mf-spinner" style={{ width: 11, height: 11 }} /></span>;
-  if (status === "error")
-    return <span className="mf-step-num" style={{ background: "rgba(255,68,68,0.14)", color: "#ff6b6b" }}>!</span>;
-  return <span className="mf-step-num">·</span>;
+// Small chevron used by the collapsible batch section.
+function Chevron() {
+  return (
+    <svg className="bf-batch-chev" width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Down-arrow used in the swap pill between the From and To cards.
+function SwapArrow() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path d="M12 5v14M6 13l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// A From/To chain card: dual token+chain badge, title, subtitle.
+function ChainCard({ label, title, sub, chain }) {
+  return (
+    <div className="bf-card">
+      <div className="bf-card-label">{label}</div>
+      <div className="bf-card-head">
+        <span className="bf-badge">
+          <span className="bf-badge-token cusd">$</span>
+          {chain === "arb" ? (
+            <span className="bf-badge-chain">
+              <img src={arbitrumSvg} alt="Arbitrum" />
+            </span>
+          ) : (
+            <span className="bf-badge-chain eth">Ξ</span>
+          )}
+        </span>
+        <div>
+          <div className="bf-card-title">{title}</div>
+          <div className="bf-card-sub">{sub}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// One phase node on the horizontal rail.
+function RailNode({ status, label }) {
+  const glyph =
+    status === "done" ? "✓" :
+    status === "error" ? "!" :
+    status === "active" ? <span className="bf-rail-spinner" /> :
+    "";
+  return (
+    <div className={`bf-rail-node ${status}`}>
+      <span className="bf-rail-dot">{glyph}</span>
+      <span className="bf-rail-label">{label}</span>
+    </div>
+  );
 }
 
 export default function BridgeFlow() {
@@ -93,6 +151,7 @@ export default function BridgeFlow() {
   const { switchChainAsync } = useSwitchChain();
 
   const [rows, setRows] = useState(DEFAULT_ROWS);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -137,7 +196,7 @@ export default function BridgeFlow() {
     setSteps({});
     if (!isConnected) return setError("Connect your wallet to bridge.");
     if (!configReady) return setError("Bridge addresses are not configured.");
-    if (!rowsValid) return setError("Each row needs a valid 0x address and a positive USDC amount.");
+    if (!rowsValid) return setError("Each transfer needs a valid 0x address and a positive USDC amount.");
 
     setRunning(true);
     runningRef.current = true;
@@ -176,6 +235,18 @@ export default function BridgeFlow() {
 
   const started = Object.keys(steps).length > 0;
 
+  // Main row (row 0) is the user's transfer; rows 1-2 are batch fillers.
+  const mainRow = rows[0];
+  const mainBad = (mainRow.recipient || "").trim() !== "" && !isHex(mainRow.recipient.trim(), 20);
+
+  const ctaLabel = !isConnected
+    ? "Connect wallet to bridge"
+    : !configReady
+    ? "Bridge unavailable"
+    : running
+    ? "Bridging confidentially…"
+    : "Bridge confidentially";
+
   return (
     <div>
       <div className="mf-view-title">Confidential bridge</div>
@@ -191,62 +262,126 @@ export default function BridgeFlow() {
         </div>
       )}
 
-      {/* ---- transfer rows ---- */}
-      <div className="mf-card">
-        <span className="mf-label">Batch of 3 confidential transfers</span>
-        {rows.map((r, i) => {
-          // Only flag as bad when the user typed something invalid; a blank
-          // field falls back to the connected address (shown as placeholder).
-          const typed = (r.recipient || "").trim();
-          const bad = typed !== "" && !isHex(typed, 20);
-          return (
-            <div
-              key={i}
-              style={{
-                padding: "10px 0",
-                borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,0.04)",
-              }}
-            >
-              <div
-                className="mf-field-label"
-                style={{ marginBottom: 6, color: i === 0 ? "#F5D64B" : "#8a8a8e" }}
-              >
-                {i === 0 ? "Your transfer" : r.label}
-              </div>
-              <input
-                className="mf-input mono"
-                style={{ marginBottom: 6, borderColor: bad ? "rgba(255,68,68,0.4)" : undefined }}
-                placeholder={address || "0x… destination"}
-                value={r.recipient}
-                disabled={running}
-                onChange={(e) => updateRow(i, { recipient: e.target.value })}
-              />
-              <div className="mf-row" style={{ padding: 0, alignItems: "center" }}>
-                <input
-                  className="mf-input"
-                  style={{ maxWidth: 140 }}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={r.amount}
-                  disabled={running}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (/^\d*\.?\d*$/.test(v)) updateRow(i, { amount: v });
-                  }}
-                />
-                <span className="k" style={{ fontSize: 12 }}>
-                  {parsed[i] != null ? `${parsed[i].toString()} base units` : "USDC"}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-        <div className="mf-row" style={{ paddingTop: 10 }}>
-          <span className="k">Batch total</span>
-          <span className="v">
-            {total != null ? `${formatUsdc(total)} USDC` : "—"}
+      {/* ---- From -> To route card ---- */}
+      <div className="bf-route">
+        <ChainCard
+          label="From"
+          title="cUSD"
+          sub="on Ethereum Sepolia"
+          chain="eth"
+        />
+        <div className="bf-swap-wrap">
+          <span className="bf-swap-pill">
+            <SwapArrow />
           </span>
         </div>
+        <ChainCard
+          label="To"
+          title="cUSD"
+          sub="on Arbitrum Sepolia"
+          chain="arb"
+        />
+      </div>
+
+      {/* ---- big amount input card (your transfer) ---- */}
+      <div className="bf-send-card">
+        <div className="bf-send-head">
+          <span className="bf-send-label">Your transfer</span>
+          <span className="bf-send-asset">
+            <LockIcon size={13} /> cUSD · confidential USDC
+          </span>
+        </div>
+        <div className="bf-send-body">
+          <input
+            className="bf-send-input"
+            inputMode="decimal"
+            placeholder="0"
+            value={mainRow.amount}
+            disabled={running}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (/^\d*\.?\d*$/.test(v)) updateRow(0, { amount: v });
+            }}
+          />
+        </div>
+        <div className="bf-send-helper">
+          <span className="bf-send-units">
+            {parsed[0] != null ? `${parsed[0].toString()} base units` : "USDC · 6 decimals"}
+          </span>
+        </div>
+
+        <div className="bf-recipient">
+          <div className="bf-recipient-label">
+            Destination address {(!mainRow.recipient || !mainRow.recipient.trim()) && "(defaults to your address)"}
+          </div>
+          <input
+            className={`bf-recipient-input ${mainBad ? "bad" : ""}`}
+            placeholder={address || "0x… destination"}
+            value={mainRow.recipient}
+            disabled={running}
+            onChange={(e) => updateRow(0, { recipient: e.target.value })}
+          />
+        </div>
+      </div>
+
+      {/* ---- collapsible batch (k=3) section ---- */}
+      <div className={`bf-batch ${batchOpen ? "open" : ""}`}>
+        <button
+          type="button"
+          className="bf-batch-head"
+          onClick={() => setBatchOpen((o) => !o)}
+        >
+          <span className="bf-batch-head-left">
+            <span className="bf-batch-tag">Batch · k=3</span>
+            <span className="bf-batch-title">
+              2 batch filler transfers
+            </span>
+          </span>
+          <Chevron />
+        </button>
+        {batchOpen && (
+          <div className="bf-batch-body">
+            <div className="bf-batch-note">
+              Amounts are hidden. A batch bundles 3 confidential transfers to
+              preserve k-anonymity. These two fillers default to small amounts
+              paid to yourself — edit them freely.
+            </div>
+            {rows.slice(1).map((r, idx) => {
+              const i = idx + 1;
+              const typed = (r.recipient || "").trim();
+              const bad = typed !== "" && !isHex(typed, 20);
+              return (
+                <div className="bf-filler" key={i}>
+                  <div className="bf-filler-fields">
+                    <span className="bf-filler-label">Filler {i} · recipient</span>
+                    <input
+                      className={`bf-filler-addr ${bad ? "bad" : ""}`}
+                      placeholder={address || "0x… (defaults to you)"}
+                      value={r.recipient}
+                      disabled={running}
+                      onChange={(e) => updateRow(i, { recipient: e.target.value })}
+                    />
+                  </div>
+                  <input
+                    className="bf-filler-amt"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={r.amount}
+                    disabled={running}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (/^\d*\.?\d*$/.test(v)) updateRow(i, { amount: v });
+                    }}
+                  />
+                </div>
+              );
+            })}
+            <div className="bf-batch-total">
+              <span className="k">Batch total (3 transfers)</span>
+              <span className="v">{total != null ? `${formatUsdc(total)} USDC` : "—"}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mf-enc-note">
@@ -258,18 +393,14 @@ export default function BridgeFlow() {
         </span>
       </div>
 
+      {/* ---- primary CTA ---- */}
       <button
-        className="mf-btn primary"
+        className="bf-cta"
         disabled={running || !isConnected || !configReady || !rowsValid}
         onClick={run}
       >
-        {running ? (
-          <>
-            <span className="mf-spinner" /> Bridging confidentially…
-          </>
-        ) : (
-          "Bridge confidentially"
-        )}
+        {running && <span className="mf-spinner" />}
+        {ctaLabel}
       </button>
 
       {!isConnected && (
@@ -282,53 +413,49 @@ export default function BridgeFlow() {
 
       {error && <div className="mf-error">{error}</div>}
 
-      {/* ---- step tracker ---- */}
+      {/* ---- horizontal phase rail: upcoming-route preview when idle, live
+              progress once running ---- */}
+      <div className="bf-progress-title">
+        {started ? "Bridging cUSD confidentially" : "Confidential route"}
+      </div>
+      <div className="bf-rail">
+        {STEP_GROUPS.map((g) => (
+          <RailNode key={g.title} status={groupStatus(g.keys)} label={g.short} />
+        ))}
+      </div>
+
+      {/* ---- detailed step tracker (revealed once a run starts) ---- */}
       {started && (
-        <div className="mf-steps" style={{ marginTop: 14 }}>
+        <div className="bf-steps">
           {STEP_GROUPS.map((g) => {
             const gStatus = groupStatus(g.keys);
+            const gGlyph =
+              gStatus === "done" ? "✓" :
+              gStatus === "error" ? "!" :
+              gStatus === "active" ? <span className="bf-rail-spinner" /> :
+              "·";
             return (
-              <div key={g.title} style={{ marginBottom: 4 }}>
-                <div className={`mf-step ${gStatus === "pending" ? "" : gStatus === "error" ? "failed" : gStatus}`}>
-                  <StepIcon status={gStatus} />
-                  <span className="mf-step-text" style={{ fontWeight: 600 }}>
-                    {g.title}
-                  </span>
+              <div key={g.title} className={`bf-phase ${gStatus}`}>
+                <div className="bf-phase-head">
+                  <span className="bf-phase-icon">{gGlyph}</span>
+                  <span className="bf-phase-title">{g.title}</span>
                 </div>
-                {/* sub-steps that have started */}
                 {g.keys
                   .filter((k) => steps[k])
                   .map((k) => {
                     const s = steps[k];
                     const meta = STEP_META[k] || {};
                     return (
-                      <div
-                        key={k}
-                        style={{ padding: "2px 0 2px 34px", fontSize: 12 }}
-                      >
-                        <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                          <span
-                            style={{
-                              color:
-                                s.status === "done"
-                                  ? "#F5D64B"
-                                  : s.status === "error"
-                                  ? "#ff6b6b"
-                                  : s.status === "active"
-                                  ? "#e5e5e7"
-                                  : "#636366",
-                            }}
-                          >
-                            {s.status === "done" ? "✓" : s.status === "error" ? "✕" : "•"} {meta.label || k}
+                      <div key={k} className={`bf-substep ${s.status}`}>
+                        <div className="bf-substep-line">
+                          <span className="glyph">
+                            {s.status === "done" ? "✓" : s.status === "error" ? "✕" : "•"}
                           </span>
+                          <span className="txt">{meta.label || k}</span>
                         </div>
-                        {s.detail && (
-                          <div className="mf-hint" style={{ marginTop: 1 }}>
-                            {s.detail}
-                          </div>
-                        )}
+                        {s.detail && <div className="bf-substep-detail">{s.detail}</div>}
                         {s.txHash && (
-                          <div className="mf-tx-hash" style={{ marginTop: 2, fontSize: 11 }}>
+                          <div className="bf-substep-tx">
                             <a
                               href={txUrl(s.chainId ?? meta.chainId, s.txHash)}
                               target="_blank"
@@ -356,28 +483,42 @@ export default function BridgeFlow() {
         </div>
       )}
 
+      {/* ---- success / status panel ---- */}
       {result && (
-        <div className="mf-success" style={{ marginTop: 10 }}>
-          Confidential bridge complete for epoch #{result.epochId?.toString()}.
+        <div className="bf-result">
+          <div className="bf-result-icon">✓</div>
+          <div className="bf-result-title">Confidential bridge complete</div>
+          <div className="bf-result-sub">
+            Epoch #{result.epochId?.toString()} settled on Arbitrum Sepolia.
+          </div>
           {result.revealedBalance != null && (
-            <>
-              {" "}
-              Your Arbitrum cUSDC balance decrypted locally ={" "}
-              <strong>{formatUsdc(result.revealedBalance)} cUSDC</strong>.
-            </>
+            <div className="bf-result-reveal">
+              {formatUsdc(result.revealedBalance)} cUSD
+              <small>your Arbitrum balance, decrypted locally</small>
+            </div>
           )}
-          {result.settleTxHash && (
-            <>
-              {" "}
-              <a
-                href={txUrl(CHAIN_IDS.SOURCE, result.settleTxHash)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                View settle/burn tx ↗
-              </a>
-            </>
-          )}
+          <div className="bf-result-details">
+            {result.aggregate != null && (
+              <div className="bf-result-row">
+                <span className="label">Public aggregate A</span>
+                <span className="value">{formatUsdc(result.aggregate)} USDC</span>
+              </div>
+            )}
+            {result.settleTxHash && (
+              <div className="bf-result-row">
+                <span className="label">Settle / burn tx</span>
+                <span className="value">
+                  <a
+                    href={txUrl(CHAIN_IDS.SOURCE, result.settleTxHash)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {shorten(result.settleTxHash, 8, 6)} ↗
+                  </a>
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
