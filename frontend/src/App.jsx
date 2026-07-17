@@ -8,6 +8,7 @@ import Noxus from "./components/Noxus";
 import ResourcesPage from "./components/ResourcesPage";
 import TeamPage from "./components/TeamPage";
 import Plasma from "./components/Plasma";
+import noxusLogo from "./assets/noxus-logo.svg";
 import "./App.css";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ function AppContent() {
         {/* Header */}
         <header className="app-header">
           <NavLink to="/" className="app-logo">
+            <img src={noxusLogo} className="app-logo-icon" alt="Noxus" />
             <span className="app-logo-text"><span className="app-logo-brace">{"{"}</span>Noxus<span className="app-logo-brace">{"}"}</span></span>
           </NavLink>
 
