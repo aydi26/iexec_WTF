@@ -73,9 +73,11 @@
   letter-spacing: -0.5px;
 }
 .bf-badge-token.cusd {
-  background: linear-gradient(135deg, #2775ca 0%, #1e5fa8 100%);
+  background: #fff;
   color: #fff;
+  overflow: hidden;
 }
+.bf-badge-token.cusd img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 .bf-badge-chain {
   position: absolute;
@@ -546,3 +548,18 @@
 }
 .bf-result-row .value a { color: var(--nx-accent); }
 .bf-result-row .value a:hover { text-decoration: underline; }
+
+.bf-result-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+.bf-result-actions .bf-cta { max-width: 240px; }
+
+/* inline "how it works" doc link */
+.bf-doclink {
+  color: var(--nx-accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bf-doclink:hover { text-decoration: underline; }

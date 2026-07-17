@@ -22,15 +22,24 @@ const docsTree = [
     category: "Protocol",
     content: {
       title: "Getting Started",
-      body: "Noxus is a confidential cross-chain USDC settlement layer over Circle CCTP V2, using iExec Nox (encrypted ERC-7984 handles + TEE) as the privacy layer. Depositors put in encrypted amounts on Ethereum Sepolia; the amounts are batched into an encrypted sum and only the aggregate is ever public; one CCTP transfer bridges the whole batch, and each recipient is confidentially credited on Arbitrum Sepolia. Individual amounts never touch the blockchain. Positioning: confidentiality, not anonymity — participants are visible, amounts are not.",
+      body: "Noxus is a confidential cross-chain USDC settlement layer over Circle CCTP V2, using iExec Nox (encrypted ERC-7984 handles + TEE) as the privacy layer. The app is a single bridge widget: you enter an amount and a destination, and everything — wrapping USDC into confidential cUSDC, batching, the CCTP bridge, the TEE integrity check and the confidential distribution — runs in the background, driven entirely from your browser. Individual amounts never touch the blockchain; only the batch aggregate is ever public. Positioning: confidentiality, not anonymity — participants are visible, amounts are not.",
       subsections: [
         {
           title: "Prerequisites",
           items: [
-            "A wallet (e.g. MetaMask) with ETH on Ethereum Sepolia for gas",
-            "Testnet USDC on Ethereum Sepolia (get it from faucet.circle.com)",
-            "The app will prompt you to switch to Ethereum Sepolia for source-side actions",
-            "For the destination leg you also need a little ETH on Arbitrum Sepolia",
+            "A wallet (e.g. MetaMask) connected to Ethereum Sepolia",
+            "Testnet USDC on Ethereum Sepolia (get it from faucet.circle.com) — the widget wraps it into cUSDC for you",
+            "A little ETH for gas on BOTH Ethereum Sepolia and Arbitrum Sepolia",
+            "During the bridge your wallet switches networks a few times — approve each prompt",
+          ],
+        },
+        {
+          title: "The k=3 batch (why a little extra)",
+          items: [
+            "Privacy needs a crowd: a batch must have at least 3 depositors to hide any single amount",
+            "So your transfer is bundled with 2 tiny automatic filler transfers back to yourself",
+            "The fillers cost a little extra USDC up front and are returned to you as cUSD on Arbitrum",
+            "You only enter your amount + destination — the fillers are handled in the background",
           ],
         },
       ],
@@ -71,6 +80,7 @@ const docsTree = [
             {
               title: "Details",
               items: [
+                "Your transfer + 2 automatic fillers make the batch reach the k=3 floor",
                 "closeEpoch() reveals only the encrypted sum (requires >= minDepositors, default 3)",
                 "settleEpoch() verifies A on-chain, unwraps exactly A, and burns via CCTP V2",
                 "A (the aggregate) is the only public number — it is unavoidable, since CCTP burns a plaintext amount",
@@ -238,7 +248,7 @@ const docsTree = [
           items: [
             "USDC uses 6 decimals — 1 USDC = 1,000,000 raw units",
             "closeEpoch requires at least minDepositors (default 3) to preserve k-anonymity",
-            "The confidential source flow is driveable from this UI; the cross-chain destination leg (relay, check, distribute) is driven by the keeper scripts",
+            "The ENTIRE bridge runs in your browser from the single widget — deposits, batching, CCTP bridge, TEE check and distribution; your wallet switches between Ethereum and Arbitrum Sepolia along the way",
             "CCTP Fast Transfer settles in ~8-20 seconds; the reveal round-trip via the Nox KMS is a few seconds",
             "Everything runs on real testnets with real USDC, real Iris attestations, and real Nox proofs — no mock data",
           ],
