@@ -39,10 +39,10 @@ sequenceDiagram
     U->>B: deposit(recipient, encAmount, dstHandle)
     B->>B: cUSDC transferFrom · encSum = Nox.add(encSum, amt)
     B->>B: closeEpoch() → reveal encSum  [requires ≥ minDepositors]
-    B->>C: settleEpoch → depositForBurnWithHook(A, hookData=(epochId, claimsHash))
+    B->>C: settleEpoch → depositForBurnWithHook(A, hookData=(epochId, ClaimId[]))
     Note over B,D: A is the ONLY public number — one burn for the whole batch
     C-->>D: Fast Transfer ~8–20s → mint A
-    D->>D: relayReceive → verify claimsHash · checkEpoch: Σ claims == A ? (TEE)
+    D->>D: relayReceive → resolve committed claims · checkEpoch: Σ claims == A ? (TEE)
     alt check == true
         D->>U: confidential cUSDC credit per recipient (amounts hidden)
     else check == false (a depositor inflated their claim)
@@ -96,6 +96,12 @@ All four contracts are **verified on [Sourcify](https://sourcify.dev)** under th
 
 > Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3.
 
+## The app
+
+The frontend is a **single in-browser bridge widget**. You enter an amount and a destination; the widget then drives the *entire* confidential cross-chain flow from your wallet — wrap USDC → cUSDC, pre-register, deposit (encrypted), close, settle + CCTP burn, relay, TEE integrity check, and confidential distribution — with a live step tracker. A **Track** tab scans both contracts and lists any bridges still in flight (and the phase each is stuck at). No scripts required to bridge.
+
+Run it locally (`cd frontend && npm install && npm run dev`) or deploy it to Vercel with the repo's `vercel.json` — see [`docs/DEPLOY_VERCEL.md`](docs/DEPLOY_VERCEL.md).
+
 ---
 
 ## Architecture
@@ -124,7 +130,7 @@ noxus/
 ├── contracts/           NoxusBatcher · NoxusDistributor · NoxusCUSDC · lib/ · interfaces/
 ├── scripts/             00 wrappers · 01 batcher · 02 deploy+wire · 03 seed · 04 honest E2E
 │                        05/05b/05c fallback+refund · bench_nox_latency · audit_privacy · verify_sourcify
-├── frontend/            Vite/React dApp — deposit · epoch dashboard · decrypt · auditor · keeper
+├── frontend/            Vite/React dApp — single in-browser confidential bridge widget (Bridge + Track)
 ├── docs/                SPEC.md (full spec + worklog) · PLAN.md · DEMO_SCRIPT.md · X_POST.md
 ├── deployments/         live addresses per chainId
 ├── feedback.md          iExec tooling feedback (required deliverable)
@@ -158,11 +164,13 @@ pnpm exec tsx scripts/audit_privacy.ts        # static privacy audit (3 reveal s
 pnpm exec tsx scripts/bench_nox_latency.ts    # KMS latency GO/NO-GO bench
 ```
 
-Frontend:
+Frontend — the single in-browser bridge widget (no scripts needed to bridge):
 
 ```bash
-cd frontend && pnpm install --ignore-workspace && pnpm dev
+cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
+
+Connect a wallet on Ethereum Sepolia, enter an amount + destination, and the widget runs the whole confidential cross-chain flow for you (approving each network switch when prompted).
 
 Faucets: [Sepolia ETH](https://sepoliafaucet.com) · [Arbitrum Sepolia ETH](https://faucet.quicknode.com/arbitrum/sepolia) · [Circle USDC](https://faucet.circle.com) (20 USDC / 2h / address).
 
@@ -193,7 +201,7 @@ Faucets: [Sepolia ETH](https://sepoliafaucet.com) · [Arbitrum Sepolia ETH](http
 
 ## Team
 
-**Aiden** — [X](https://x.com/aiden_7788) · [LinkedIn](https://www.linkedin.com/in/adrian-verdes/)
+**Aiden** — [X](https://x.com/aiden_7788) · [Telegram](https://t.me/aiden_7788)
 
 ## Security
 

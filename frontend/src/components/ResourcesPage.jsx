@@ -249,6 +249,7 @@ const docsTree = [
             "USDC uses 6 decimals — 1 USDC = 1,000,000 raw units",
             "closeEpoch requires at least minDepositors (default 3) to preserve k-anonymity",
             "The ENTIRE bridge runs in your browser from the single widget — deposits, batching, CCTP bridge, TEE check and distribution; your wallet switches between Ethereum and Arbitrum Sepolia along the way",
+            "The Track tab lists every bridge that was started but is not complete yet, and the exact phase it is stuck at — refresh it any time",
             "CCTP Fast Transfer settles in ~8-20 seconds; the reveal round-trip via the Nox KMS is a few seconds",
             "Everything runs on real testnets with real USDC, real Iris attestations, and real Nox proofs — no mock data",
           ],
