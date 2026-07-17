@@ -421,7 +421,7 @@ export default function ResourcesPage() {
 
         <div className="docs-sidebar-cta">
           <Link to="/" className="docs-sidebar-cta-btn">
-            Open the App
+            Start bridging
           </Link>
         </div>
       </aside>

@@ -99,6 +99,17 @@ export default function StaggeredMenu() {
     });
   };
 
+  // Close the menu when clicking anywhere outside the panel (not just the X).
+  useEffect(() => {
+    if (!isOpen) return;
+    const onDown = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) handleClose();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   const handleNavigate = (path) => {
     handleClose();
     setTimeout(() => navigate(path), 300);

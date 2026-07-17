@@ -717,3 +717,24 @@
   cursor: pointer; padding: 0;
 }
 .bf-linkbtn:hover { text-decoration: underline; }
+.bf-linkbtn:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+
+/* in-flight bridges board (Track tab) */
+.bf-board { margin-top: 16px; }
+.bf-board-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; font-weight: 600; color: #8a8a8e; letter-spacing: 0.3px;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.bf-board-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 12px 14px; margin-bottom: 8px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(245, 214, 75, 0.14);
+}
+.bf-board-left { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bf-board-epoch { font-size: 14px; font-weight: 600; color: #fff; }
+.bf-board-phase { font-size: 12px; color: #a0a0a5; }
+.bf-board-agg {
+  font-size: 12px; font-weight: 600; color: var(--nx-accent); white-space: nowrap;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}

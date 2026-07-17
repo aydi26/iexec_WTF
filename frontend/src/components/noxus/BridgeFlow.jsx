@@ -8,7 +8,7 @@
 // automatic filler transfers back to the sender. Orchestration is delegated
 // UNCHANGED to runConfidentialBridge in ../../lib/bridge.js.
 // ============================================================================
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAccount, useConfig, usePublicClient, useSwitchChain } from "wagmi";
 import { getWalletClient } from "wagmi/actions";
@@ -17,6 +17,8 @@ import {
   DISTRIBUTOR_ADDRESS,
   DEST_CUSDC_ADDRESS,
   BATCHER_ADDRESS,
+  BATCHER_ABI,
+  DISTRIBUTOR_ABI,
   txUrl,
 } from "../../config/contracts";
 import { parseUsdc, formatUsdc, isHex } from "./format";
@@ -144,6 +146,11 @@ export default function BridgeFlow() {
   const runningRef = useRef(false);
   const startRef = useRef(0);
 
+  // Track tab: on-chain scan of every started-but-not-complete bridge (epoch).
+  const [bridges, setBridges] = useState([]);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState(null);
+
   const configReady = !!BATCHER_ADDRESS && !!DISTRIBUTOR_ADDRESS && !!DEST_CUSDC_ADDRESS;
   const me = address || "";
   const destAddr = (destination || "").trim() || me;
@@ -217,6 +224,75 @@ export default function BridgeFlow() {
     if (sts.length) return "active";
     return "pending";
   };
+
+  // Scan every epoch on both contracts and surface the ones that were started but
+  // are NOT complete yet (not Distributed / not Refunded) — i.e. bridges in flight.
+  const scanBridges = useCallback(async () => {
+    if (!publicClientSource || !BATCHER_ADDRESS) return;
+    setScanning(true);
+    setScanError(null);
+    try {
+      const cur = await publicClientSource.readContract({
+        address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "currentEpoch",
+      });
+      const ids = [];
+      for (let i = 0n; i <= cur; i++) ids.push(i);
+      const rows = await Promise.all(ids.map(async (id) => {
+        const b = await publicClientSource.readContract({
+          address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "epochInfo", args: [id],
+        });
+        let d = null;
+        if (publicClientDest && DISTRIBUTOR_ADDRESS) {
+          try {
+            d = await publicClientDest.readContract({
+              address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "epochInfo", args: [id],
+            });
+          } catch { d = null; }
+        }
+        return { id, b, d };
+      }));
+      const inflight = rows.map(({ id, b, d }) => {
+        const bState = Number(b[0]);       // 0 Open, 1 Closed, 2 Settled, 3 Refunded
+        const activeCount = Number(b[1]);
+        const bAgg = b[2];
+        const refunded = b[3];
+        const entryCount = Number(b[4]);
+        const dState = d ? Number(d[0]) : 0; // 0 None..4 Distributed..6 RefundInitiated
+        const dAgg = d ? d[1] : 0n;
+        const started = entryCount > 0 || dState !== 0;
+        const complete = dState === 4 || dState === 6 || refunded === true;
+        if (!started || complete) return null;
+        let phase, agg = null;
+        if (dState >= 1) {
+          agg = dAgg;
+          phase =
+            dState === 1 ? "Pre-registered — awaiting CCTP relay on Arbitrum" :
+            dState === 2 ? "Relayed — awaiting integrity check" :
+            dState === 3 ? "Checked — awaiting finalize + distribution" :
+            dState === 5 ? "Integrity failed — awaiting refund to source" :
+            "In progress";
+        } else {
+          phase =
+            bState === 0 ? `Collecting deposits (${activeCount}/3)` :
+            bState === 1 ? "Closed — awaiting settle + CCTP burn" :
+            bState === 2 ? "Bridged via CCTP — awaiting relay on Arbitrum" :
+            "In progress";
+          if (bState === 2) agg = bAgg;
+        }
+        return { id: id.toString(), phase, agg, bState, dState };
+      }).filter(Boolean);
+      setBridges(inflight);
+    } catch (e) {
+      setScanError(e?.shortMessage || e?.message?.slice(0, 160) || "Scan failed");
+    } finally {
+      setScanning(false);
+    }
+  }, [publicClientSource, publicClientDest]);
+
+  // Refresh the in-flight board whenever the Track tab is opened or a run finishes.
+  useEffect(() => {
+    if (view === "track") scanBridges();
+  }, [view, result, scanBridges]);
 
   const started = Object.keys(steps).length > 0;
   const txOf = (k) => steps[k]?.txHash;
@@ -301,9 +377,7 @@ export default function BridgeFlow() {
           <div className="bridge-send-card">
             <div className="bridge-send-header">
               <p className="bridge-send-label">Send</p>
-              <span className="bridge-send-label" style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
-                <LockIcon size={12} /> confidential
-              </span>
+              <span className="bridge-send-label">confidential</span>
             </div>
             <div className="bridge-send-body">
               <UsdcBadge chain="eth" small />
@@ -361,22 +435,7 @@ export default function BridgeFlow() {
             </div>
           </div>
 
-          <div className="bridge-foot-note">
-            <LockIcon size={13} />
-            <span>
-              Bundled into a private <strong>k=3 batch</strong> — 2 small fillers are added
-              automatically and returned to you.{" "}
-              <Link to="/resources" className="bf-doclink">Details ↗</Link>
-            </span>
-          </div>
-
           {error && <div className="mf-error" style={{ marginTop: 12 }}>{error}</div>}
-          {!isConnected && (
-            <div className="mf-note todo" style={{ marginTop: 10 }}>
-              Connect your wallet (top-right) on Ethereum Sepolia. The flow switches your
-              wallet between Ethereum and Arbitrum Sepolia — approve each prompt.
-            </div>
-          )}
         </div>
       )}
 
@@ -476,11 +535,34 @@ export default function BridgeFlow() {
                 </div>
               )}
             </>
-          ) : (
-            <div className="bf-track-empty">
-              No active bridge. Start one from the <button className="bf-linkbtn" onClick={() => setView("bridge")}>Bridge</button> tab.
+          ) : null}
+
+          {/* in-flight bridges: every started epoch that is not complete yet */}
+          <div className="bf-board">
+            <div className="bf-board-head">
+              <span>Bridges in progress</span>
+              <button className="bf-linkbtn" onClick={scanBridges} disabled={scanning}>
+                {scanning ? "Scanning…" : "Refresh"}
+              </button>
             </div>
-          )}
+            {scanError && <div className="mf-error">{scanError}</div>}
+            {!scanning && !scanError && bridges.length === 0 && (
+              <div className="bf-track-empty">
+                No bridges in progress — every started epoch is complete.
+              </div>
+            )}
+            {bridges.map((b) => (
+              <div className="bf-board-row" key={b.id}>
+                <div className="bf-board-left">
+                  <span className="bf-board-epoch">Epoch #{b.id}</span>
+                  <span className="bf-board-phase">{b.phase}</span>
+                </div>
+                {b.agg != null && b.agg > 0n && (
+                  <span className="bf-board-agg">A = {formatUsdc(b.agg)} USDC</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
