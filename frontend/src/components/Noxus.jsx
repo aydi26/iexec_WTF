@@ -4,6 +4,7 @@
 // Noxus views behind a tab bar.
 // ============================================================================
 import { useState } from "react";
+import BridgeFlow from "./noxus/BridgeFlow";
 import DepositView from "./noxus/DepositView";
 import EpochDashboard from "./noxus/EpochDashboard";
 import DecryptView from "./noxus/DecryptView";
@@ -12,6 +13,7 @@ import KeeperView from "./noxus/KeeperView";
 import "./Noxus.css";
 
 const TABS = [
+  { key: "bridge", label: "Bridge", el: BridgeFlow },
   { key: "deposit", label: "Deposit", el: DepositView },
   { key: "epochs", label: "Epochs", el: EpochDashboard },
   { key: "decrypt", label: "Decrypt", el: DecryptView },
@@ -20,8 +22,8 @@ const TABS = [
 ];
 
 export default function Noxus() {
-  const [tab, setTab] = useState("deposit");
-  const Active = TABS.find((t) => t.key === tab)?.el ?? DepositView;
+  const [tab, setTab] = useState("bridge");
+  const Active = TABS.find((t) => t.key === tab)?.el ?? BridgeFlow;
 
   return (
     <div className="mf-shell">

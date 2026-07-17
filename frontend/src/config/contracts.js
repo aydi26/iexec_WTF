@@ -59,6 +59,8 @@ export const BATCHER_ADDRESS = ADDRESSES[CHAIN_IDS.SOURCE].NoxusBatcher;
 export const CUSDC_ADDRESS = ADDRESSES[CHAIN_IDS.SOURCE].NoxusCUSDC;
 export const DISTRIBUTOR_ADDRESS =
   ADDRESSES[CHAIN_IDS.DEST].NoxusDistributor; // may be undefined (TODO)
+// Destination-leg cUSDC (Arb Sepolia) — where the confidential credit lands.
+export const DEST_CUSDC_ADDRESS = ADDRESSES[CHAIN_IDS.DEST].NoxusCUSDC;
 
 export const CUSDC_DECIMALS = 6; // amounts entered/displayed in USDC (6 decimals)
 
