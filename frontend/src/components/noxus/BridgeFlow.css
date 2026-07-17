@@ -563,3 +563,157 @@
   white-space: nowrap;
 }
 .bf-doclink:hover { text-decoration: underline; }
+
+/* ============================================================================
+   Exchange-style bridge widget (Noxus yellow accent)
+   ========================================================================== */
+.bridge-widget {
+  width: 100%;
+  max-width: 416px;
+  margin: 0 auto;
+  background: rgba(18, 18, 20, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.bridge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+}
+.bridge-header-left { display: flex; align-items: center; gap: 8px; }
+.bridge-title { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+.bridge-tabs { display: flex; gap: 2px; background: rgba(255, 255, 255, 0.04); border-radius: 8px; padding: 2px; }
+.bridge-tab {
+  padding: 6px 14px; border-radius: 6px; border: none; background: transparent;
+  color: #8a8a8e; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease;
+}
+.bridge-tab:hover { color: #ccc; }
+.bridge-tab.active { background: rgba(255, 255, 255, 0.08); color: #fff; }
+
+.bridge-settings-btn {
+  width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent;
+  color: #8a8a8e; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;
+}
+.bridge-settings-btn:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.bridge-settings-btn.active { color: var(--nx-accent); background: rgba(245, 214, 75, 0.08); }
+.bridge-settings-icon { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+.bridge-settings-btn.active .bridge-settings-icon { transform: rotate(90deg); }
+
+.bridge-settings-panel {
+  margin: 0 16px 12px; padding: 12px 14px; border-radius: 12px;
+  background: rgba(245, 214, 75, 0.05); border: 1px solid rgba(245, 214, 75, 0.14);
+}
+.bridge-settings-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #fff; font-weight: 600; margin-bottom: 6px; }
+.bridge-settings-panel p { font-size: 12px; line-height: 1.5; color: #a0a0a5; margin: 0; }
+
+.bridge-body { padding: 0 16px 16px; animation: tabFadeIn 0.25s ease; }
+@keyframes tabFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.bridge-card {
+  background: rgba(255, 255, 255, 0.04); border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.04); transition: all 0.15s ease;
+}
+.bridge-card-content { padding: 16px; }
+.bridge-card-label { font-size: 12px; font-weight: 600; color: #8a8a8e; margin-bottom: 10px; letter-spacing: 0.3px; }
+.bridge-card-header { display: flex; align-items: center; gap: 12px; }
+
+.bridge-badge { position: relative; width: 40px; height: 40px; flex-shrink: 0; }
+.bridge-badge-token {
+  width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.bridge-badge-token svg, .bridge-badge-token img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.bridge-badge-chain {
+  position: absolute; bottom: -2px; right: -2px; width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid rgba(18, 18, 20, 0.95); overflow: hidden; background: #12121a;
+  display: flex; align-items: center; justify-content: center;
+}
+.bridge-badge-chain svg, .bridge-badge-chain img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+.bridge-card-text { display: flex; flex-direction: column; }
+.bridge-card-title { font-size: 14px; font-weight: 600; color: #fff; }
+.bridge-card-subtitle { font-size: 12px; color: #636366; margin-top: 2px; }
+
+.bridge-swap-wrapper { display: flex; justify-content: center; align-items: center; height: 0; position: relative; z-index: 2; }
+.bridge-swap-pill {
+  width: 32px; height: 32px; border-radius: 50%; background: rgba(30, 30, 34, 0.95);
+  border: 3px solid rgba(18, 18, 20, 0.95); display: flex; align-items: center; justify-content: center;
+  color: #8a8a8e; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.bridge-swap-pill svg { width: 16px; height: 16px; }
+
+.bridge-send-card {
+  margin-top: 12px; background: rgba(255, 255, 255, 0.04); border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.04); padding: 16px; transition: border-color 0.15s ease;
+}
+.bridge-send-card:focus-within { border-color: rgba(255, 255, 255, 0.08); }
+.bridge-send-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.bridge-send-label { font-size: 12px; font-weight: 600; color: #8a8a8e; letter-spacing: 0.3px; }
+.bridge-send-body { display: flex; align-items: center; gap: 12px; }
+.bridge-badge.small, .bridge-badge.small .bridge-badge-token { width: 32px; height: 32px; }
+.bridge-badge.small .bridge-badge-chain { width: 14px; height: 14px; bottom: -1px; right: -1px; }
+.bridge-send-input-area { flex: 1; min-width: 0; }
+.bridge-send-input {
+  width: 100%; background: transparent; border: none; outline: none;
+  font-size: 24px; font-weight: 600; color: #fff; min-width: 0;
+}
+.bridge-send-input::placeholder { color: #3a3a3c; }
+.bridge-send-helper { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.bridge-send-usd { font-size: 12px; color: #636366; }
+.bridge-send-balance { font-size: 12px; color: #636366; }
+
+.bridge-actions { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
+.bridge-btn {
+  flex: 1; padding: 14px 20px; border-radius: 12px; border: none; font-size: 16px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s ease; text-align: center;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.bridge-btn.primary { background: var(--nx-accent); color: #000; }
+.bridge-btn.primary:hover:not(:disabled) { background: #F8E486; }
+.bridge-btn.primary:active:not(:disabled) { background: #d9bd3a; }
+.bridge-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.bridge-wallet-btn {
+  width: 44px; height: 44px; border-radius: 12px; border: none; background: rgba(255, 255, 255, 0.04);
+  color: #8a8a8e; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all 0.15s ease;
+}
+.bridge-wallet-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.bridge-wallet-btn.active { background: rgba(245, 214, 75, 0.1); color: var(--nx-accent); }
+
+.bridge-recipient-area {
+  max-height: 0; opacity: 0; overflow: hidden; margin-top: 0;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, margin-top 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bridge-recipient-area.open { max-height: 140px; opacity: 1; margin-top: 12px; }
+.bridge-recipient-card {
+  background: rgba(255, 255, 255, 0.04); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 14px 16px; transition: border-color 0.15s ease;
+}
+.bridge-recipient-card:focus-within { border-color: rgba(245, 214, 75, 0.2); }
+.bridge-recipient-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.bridge-recipient-header svg { color: #8a8a8e; flex-shrink: 0; }
+.bridge-recipient-title { font-size: 12px; font-weight: 600; color: #8a8a8e; letter-spacing: 0.3px; }
+.bridge-recipient-input {
+  width: 100%; padding: 0; border: none; background: transparent; color: #fff;
+  font-size: 14px; font-family: 'SF Mono', 'Fira Code', monospace; outline: none;
+}
+.bridge-recipient-input::placeholder { color: #3a3a3c; }
+.bridge-recipient-input.bad { color: #ff6b6b; }
+
+.bridge-foot-note {
+  margin-top: 14px; display: flex; gap: 8px; align-items: flex-start;
+  font-size: 12px; line-height: 1.5; color: #8a8a8e;
+}
+.bridge-foot-note svg { flex-shrink: 0; margin-top: 2px; color: var(--nx-accent); }
+
+.bf-track-empty { padding: 28px 8px; text-align: center; color: #8a8a8e; font-size: 13px; }
+.bf-linkbtn {
+  background: none; border: none; color: var(--nx-accent); font: inherit; font-weight: 600;
+  cursor: pointer; padding: 0;
+}
+.bf-linkbtn:hover { text-decoration: underline; }

@@ -151,11 +151,8 @@ export default function StaggeredMenu() {
 
             {/* Social icons */}
             <div ref={socialsRef} className="staggered-menu-socials">
-              <a href="https://x.com/DeVinciBC" className="staggered-menu-social" title="X" target="_blank" rel="noreferrer">
+              <a href="https://x.com/aiden_7788" className="staggered-menu-social" title="X" target="_blank" rel="noreferrer">
                 <SocialIcon type="x" />
-              </a>
-              <a href="https://discord.gg/ucWA8gDF" className="staggered-menu-social" title="Discord" target="_blank" rel="noreferrer">
-                <SocialIcon type="discord" />
               </a>
               <a href="https://web.telegram.org/k/#@iexec_rlc_official" className="staggered-menu-social" title="Telegram" target="_blank" rel="noreferrer">
                 <SocialIcon type="telegram" />

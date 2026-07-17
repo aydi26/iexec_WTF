@@ -8,11 +8,5 @@ import BridgeFlow from "./noxus/BridgeFlow";
 import "./Noxus.css";
 
 export default function Noxus() {
-  return (
-    <div className="mf-shell">
-      <div className="mf-body">
-        <BridgeFlow />
-      </div>
-    </div>
-  );
+  return <BridgeFlow />;
 }
