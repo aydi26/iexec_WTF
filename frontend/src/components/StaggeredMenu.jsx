@@ -160,7 +160,7 @@ export default function StaggeredMenu() {
               <a href="https://web.telegram.org/k/#@iexec_rlc_official" className="staggered-menu-social" title="Telegram" target="_blank" rel="noreferrer">
                 <SocialIcon type="telegram" />
               </a>
-              <a href="https://github.com/skar8848/iexec-hack" className="staggered-menu-social" title="GitHub" target="_blank" rel="noreferrer">
+              <a href="https://github.com/aydi26/iexec_WTF" className="staggered-menu-social" title="GitHub" target="_blank" rel="noreferrer">
                 <SocialIcon type="github" />
               </a>
             </div>

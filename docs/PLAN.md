@@ -6,7 +6,7 @@ Noxus ships confidential cross-chain USDC settlement over unmodified Circle CCTP
 
 This session: primary-source verification burned down most §7.6 unknowns (§1 below); the design was then adversarially reviewed by three independent critics and revised (opt-in fallback reveal, deposit-withdrawal healing, revised latency tiers, expiration handling). Nothing modifies CCTP or Nox (G1); every address carries provenance or a re-verification task (G2); `allowPublicDecryption` appears at exactly 3 authored sites (G3); no implementation code was written.
 
-**User decisions recorded (asked 2026-07-12):** frontend = port of `skar8848/HyperSecret-hack4privacy` (team page keeps only the Aiden card) · keeper fully driven/visible via frontend with on-screen proof · demo amounts 3.10/2.45/4.45 → A = 10.00 · keep spec names + rename `README_NOXUS.md` → `README.md` at commit #1.
+**User decisions recorded (asked 2026-07-12):** frontend = port of an earlier hackathon UI (team page keeps only the Aiden card) · keeper fully driven/visible via frontend with on-screen proof · demo amounts 3.10/2.45/4.45 → A = 10.00 · keep spec names + rename `README_NOXUS.md` → `README.md` at commit #1.
 
 ---
 
@@ -164,17 +164,17 @@ With the real SDK, build dst-chain (421614) inputs; `hookData = abi.encode(uint2
 
 **Commands:** `pnpm tsx scripts/14_fallback_demo.ts` · `pnpm audit:privacy`. **Exit:** DoD ② live; grep == 3; refund credits verified by depositor client-decrypt.
 
-### Phase 6 — Frontend (HyperSecret port) + auditor mode (Jul 26–29, ~4 d) — DoD ③
+### Phase 6 — Frontend (UI shell port) + auditor mode (Jul 26–29, ~4 d) — DoD ③
 
-**Objective:** four views + keeper control panel, adapted from `github.com/skar8848/HyperSecret-hack4privacy` (user decisions Q1/Q2). Depends on: Phases 4–5 (frontend strictly after first E2E — §12).
+**Objective:** four views + keeper control panel, adapted from `an earlier hackathon UI` (user decisions Q1/Q2). Depends on: Phases 4–5 (frontend strictly after first E2E — §12).
 
-Recon (2026-07-12): Vite 7 + React 19 JS SPA in `frontend/`; plain CSS; wagmi v3 + viem v2 (custom ConnectButton, injected connector); react-query; react-router; routes `/` (BridgeWidget), `/resources`, `/team` (ProfileCards skar88 + Aiden); WebGL backgrounds (ogl/gsap); chain layer = classic `iexec` SDK, Arb Sepolia only; addresses in `src/config/contracts.js`; optional `FALLBACK_API` backend. **No LICENSE file.**
+Recon (2026-07-12): Vite 7 + React 19 JS SPA in `frontend/`; plain CSS; wagmi v3 + viem v2 (custom ConnectButton, injected connector); react-query; react-router; routes `/` (BridgeWidget), `/resources`, `/team` (ProfileCards (Aiden)); WebGL backgrounds (ogl/gsap); chain layer = classic `iexec` SDK, Arb Sepolia only; addresses in `src/config/contracts.js`; optional `FALLBACK_API` backend. **No LICENSE file.**
 
 - [ ] Port shell: copy `frontend/`, rebrand Noxus; **TeamPage keeps only the Aiden card**; fix doubled `css/css`/`fonts/fonts` paths; stay JS
 - [ ] Rip out classic-iExec layer (`iexec` SDK, orderbook/TEE-task code, `FALLBACK_API` path) → `@iexec-nox/handle` (`createViemHandleClient`) + wagmi calls; dual-chain config (ETH Sep + Arb Sep, switch prompts)
 - [ ] Views: **Deposit** (BridgeWidget refit: balance pre-check (client-decrypt own cUSDC — blocks the innocent zero-transfer case) → `setOperator` → dual `encryptInput` → `deposit`) · **Epoch dashboard** (state, count, history; direct RPC primary, subgraph for history per R6) · **Decrypt-my-balance** · **Auditor** (grant `addViewer` → auditor decrypts one amount → `removeViewer`, on screen)
 - [ ] **Keeper control panel (Q2: everything visible with proof):** buttons close → settle → relay → finalize (+ fallback controls), each showing live status: tx hash → explorer link, Iris state, KMS-proof fetched/verified indicators, revealed A, check result. CLI scripts remain the rehearsed instant fallback (R11)
-- [ ] Compliance hygiene: record HyperSecret authors' written consent for shell reuse (no LICENSE — all-rights-reserved by default; user appears to be co-author — confirm) + credit in README ("frontend shell adapted from our earlier HyperSecret UI; all Noxus logic new"); Discord Q2 already asks for confirmation
+- [ ] Compliance hygiene: record the base UI authors' written consent for shell reuse (no LICENSE — all-rights-reserved by default; user appears to be co-author — confirm) + credit in README ("frontend shell adapted from our earlier base UI; all Noxus logic new"); Discord Q2 already asks for confirmation
 - [ ] Manual walkthrough on a live epoch, auditor flow from the UI
 
 **Commands:** `pnpm dev` / `pnpm build` in `frontend/`. **Exit:** four views + keeper panel drive a live epoch start-to-finish from the UI; DoD ③.
@@ -308,7 +308,7 @@ One official `ERC20ToERC7984Wrapper` instance per chain (deploying instances is 
 | R8 | Keeper key/gas management | script failures; drained/nonce-stuck account | Two funded accounts Day 0; pre-demo balance+buffer check; idempotent resumable steps; any EOA substitutes (permissionless) |
 | R9 | Epoch stuck: KMS proof never arrives / buffers empty | `Closed`/`CheckPending` > timeout; buffer < fee | Dst: widened `forceFallback` → refund (no Nox needed). Src `Closed`: wait+retry only (accepted, documented; small demo amounts). Buffer freeze: anyone tops up (keeper pre-flight warns) |
 | R10 | Prior-art collision | Discord Q2 reveals similar prior project | §11 claim wording already narrow; differentiate in related-work; re-angle pitch (integrity check + refund leg are novel) |
-| R11 | Frontend port liabilities (HyperSecret) | license question; recycled-UI optics; UI keeper step fails on camera | No LICENSE upstream → record authors' written consent (user appears to be co-author — confirm) + README credit + provenance disclosure ("all Noxus logic new"); Discord Q2 asks explicitly; CLI fallback rehearsed for every keeper step |
+| R11 | Frontend port liabilities (base UI) | license question; recycled-UI optics; UI keeper step fails on camera | No LICENSE upstream → record authors' written consent (user appears to be co-author — confirm) + README credit + provenance disclosure ("all Noxus logic new"); Discord Q2 asks explicitly; CLI fallback rehearsed for every keeper step |
 | R12 | Gas-only fallback-forcing griefer | repeated `check == 0` epochs w/ zero-value deposits | By design post-critique: opt-in reveal removes deanonymization payoff; refund makes everyone whole; cost to us = fee-buffer drain (monitored) + nuisance; k-floor documented as heuristic; organic-volume mitigation only (bonds stay dropped per D-004) |
 
 ---
@@ -342,7 +342,7 @@ level w/ per-function ACL map (3 reveal sites: closeEpoch / checkEpoch / request
 (local stub → fork spike → testnet-primary); 12-risk register; deliverables mapping. Design passed 3-critic
 adversarial review; fixes folded in (opt-in fallback reveal, withdrawDeposit healing, balance-delta settle
 check, widened forceFallback, expiration handling, production-shaped bench item). User decisions: frontend =
-HyperSecret shell port (Aiden card only); keeper via frontend w/ visible proof; amounts 3.10/2.45/4.45;
+base UI shell port (Aiden card only); keeper via frontend w/ visible proof; amounts 3.10/2.45/4.45;
 README renamed at commit #1.
 **Verified (primary sources, 2026-07-12):** TokenMessengerV2 testnet 0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA
 + MessageTransmitterV2 testnet 0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275 — SAME both chains (developers.
@@ -380,7 +380,7 @@ All future sessions follow §12 protocol: ① read §7 + STATE + last 2 worklog 
 ## 8. Questions for the human
 
 Asked interactively 2026-07-12 — answers recorded:
-1. **Frontend stack** → **port `skar8848/HyperSecret-hack4privacy` exactly, adapted to Noxus; team page keeps only the Aiden card.** (Its stack — Vite+React+wagmi/viem — matches the original recommendation; port replaces its classic-iExec layer with the Nox handle SDK. Recon in Phase 6; liabilities in R11.)
+1. **Frontend stack** → **port an earlier hackathon UI exactly, adapted to Noxus; team page keeps only the Aiden card.** (Its stack — Vite+React+wagmi/viem — matches the original recommendation; port replaces its classic-iExec layer with the Nox handle SDK. Recon in Phase 6; liabilities in R11.)
 2. **Keeper** → **everything visible and driven via the frontend, with on-screen proof per step.** Phase 6 keeper panel (tx links, Iris state, KMS-proof indicators, check result); CLI stays as rehearsed fallback.
 3. **Demo amounts** → **3.10 / 2.45 / 4.45 → A = 10.00 USDC** per epoch (~60 USDC total incl. rehearsals — fine with faucet banking).
 4. **Naming + rename** → **keep spec names; rename to `README.md` at commit #1.**

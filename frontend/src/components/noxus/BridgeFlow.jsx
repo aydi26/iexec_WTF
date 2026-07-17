@@ -3,7 +3,7 @@
 //   deposit -> batch -> CCTP burn -> Iris relay -> integrity check ->
 //   confidential distribution, all driven from the wallet (no scripts).
 //
-// PRESENTATION ONLY: this view is re-skinned to mirror the HyperSecret
+// PRESENTATION ONLY: this view is re-skinned to mirror the base UI
 // BridgeWidget aesthetic (From -> To route card + swap pill, a big amount
 // input card, a collapsible k=3 batch section, a horizontal step tracker,
 // and a success/status panel), recolored to the Noxus yellow accent. The

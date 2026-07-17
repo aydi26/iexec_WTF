@@ -1,5 +1,5 @@
 /* ============================================================================
-   BridgeFlow — Noxus confidential bridge, restyled to mirror the HyperSecret
+   BridgeFlow — Noxus confidential bridge, restyled to mirror the base UI
    BridgeWidget look-and-feel (recolored from mint green to the Noxus yellow
    accent #F5D64B). Only presentation lives here; the confidential flow is
    driven unchanged by ../../lib/bridge.js.
