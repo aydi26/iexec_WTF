@@ -90,7 +90,7 @@ export function TxStatus({ label, hash, isPending, isConfirming, isSuccess, isEr
               <span className="mf-spinner" /> confirming…
             </span>
           )}
-          {isSuccess && <span style={{ color: "#B0F2B6" }}> confirmed</span>}
+          {isSuccess && <span style={{ color: "#F5D64B" }}> confirmed</span>}
           {isError && <span style={{ color: "#ff6b6b" }}>reverted</span>}
         </span>
       </div>

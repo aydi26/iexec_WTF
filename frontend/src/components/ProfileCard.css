@@ -24,7 +24,7 @@
   height: 200px;
   border-radius: 16px;
   overflow: hidden;
-  border: 2px solid rgba(176, 242, 182, 0.15);
+  border: 2px solid rgba(245, 214, 75, 0.15);
 }
 
 .pcard-avatar-img {
@@ -64,7 +64,7 @@
 }
 
 .pcard-social:hover {
-  background: rgba(176, 242, 182, 0.08);
-  border-color: rgba(176, 242, 182, 0.15);
-  color: #B0F2B6;
+  background: rgba(245, 214, 75, 0.08);
+  border-color: rgba(245, 214, 75, 0.15);
+  color: #F5D64B;
 }

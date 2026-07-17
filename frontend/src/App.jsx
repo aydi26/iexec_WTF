@@ -23,7 +23,7 @@ function AppContent() {
       {/* Background */}
       <div className="app-bg">
         <Plasma
-          color="#B0F2B6"
+          color="#F5D64B"
           speed={0.6}
           direction="forward"
           scale={1.1}

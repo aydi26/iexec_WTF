@@ -110,7 +110,8 @@ contract NoxusDistributor {
     /// @dev One-shot wiring: first wire wins and is immutable after (the deploy
     /// script wires once right after deploy).
     function wirePeer(bytes32 _remoteBatcher) external {
-        if (remoteBatcher != bytes32(0)) revert AlreadyWired();
+        if (msg.sender != deployer) revert AlreadyWired(); // deployer-only: no front-run of the peer
+        if (remoteBatcher != bytes32(0)) revert AlreadyWired(); // one-shot: immutable once set
         remoteBatcher = _remoteBatcher;
         emit PeerWired(_remoteBatcher);
     }
@@ -152,7 +153,10 @@ contract NoxusDistributor {
 
         (uint256 epochId, ClaimId[] memory committed) = abi.decode(message.hookData(), (uint256, ClaimId[]));
         Epoch storage e = epochs[epochId];
-        if (e.state != State.PreRegistering) revert BadState();
+        // Allow None too: if nobody pre-registered, the mint still lands (all claims
+        // resolve as missing -> hasMissing) and the epoch can go to fallback/refund,
+        // so the aggregate is never stranded in the CCTP message.
+        if (e.state != State.None && e.state != State.PreRegistering) revert BadState();
 
         uint256 n = committed.length;
         for (uint256 i; i < n; ++i) {
@@ -223,6 +227,7 @@ contract NoxusDistributor {
             // and retry; and forceFallback rescues after fallbackTimeout (reachable
             // from CheckPending), so a short buffer never strands the epoch (F-4).
             if (usdc.balanceOf(address(this)) < e.aggregate) revert BufferShort();
+            e.state = State.Distributed; // CEI: state transition before external calls
             usdc.approve(address(wrapper), e.aggregate);
             wrapper.wrap(address(this), e.aggregate);
             uint256 n = e.claims.length;
@@ -232,7 +237,6 @@ contract NoxusDistributor {
                 Nox.allowTransient(e.claims[i].ingested, address(wrapper));
                 cusdc.confidentialTransfer(e.claims[i].recipient, e.claims[i].ingested);
             }
-            e.state = State.Distributed;
             emit EpochDistributed(epochId);
         } else {
             _enterFallback(epochId, e);

@@ -7,9 +7,9 @@ import { sleep } from "./lib/common.js";
 
 const TARGETS = [
   { chainId: 11155111, address: "0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C", path: "contracts/NoxusCUSDC.sol", name: "NoxusCUSDC" },
-  { chainId: 11155111, address: "0x5F47142fDfC4cF7B94e347e4a7cD1A8e544453cF", path: "contracts/NoxusBatcher.sol", name: "NoxusBatcher" },
+  { chainId: 11155111, address: "0x814a70961395218365DA5892F5de768a9Ed84E37", path: "contracts/NoxusBatcher.sol", name: "NoxusBatcher" },
   { chainId: 421614, address: "0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209", path: "contracts/NoxusCUSDC.sol", name: "NoxusCUSDC" },
-  { chainId: 421614, address: "0xe6fbaf60232f918d83Fe66844a5A3AB31FD5B14D", path: "contracts/NoxusDistributor.sol", name: "NoxusDistributor" },
+  { chainId: 421614, address: "0x410195cF6137661B066d4264515C6dc9b860ECFA", path: "contracts/NoxusDistributor.sol", name: "NoxusDistributor" },
 ];
 const SERVER = "https://sourcify.dev/server";
 

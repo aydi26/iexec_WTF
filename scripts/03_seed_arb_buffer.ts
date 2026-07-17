@@ -22,8 +22,8 @@ async function main() {
   const arbUsdc = (ADDR.USDC as any)[421614];
   const dist = deployments(421614).NoxusDistributor;
 
-  const bridgeAmt = 1_500_000n; // 1.5 USDC
-  const bufferAmt = 500_000n; // 0.5 USDC to the Distributor
+  const bridgeAmt = 400_000n; // 0.4 USDC (only if Arb USDC runs low)
+  const bufferAmt = 150_000n; // 0.15 USDC buffer to the Distributor (covers the CCTP fee gap)
 
   const arbUsdcC = new Contract(arbUsdc, ERC20, arb.wallet);
   const have = await arbUsdcC.balanceOf(me);

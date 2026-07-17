@@ -174,7 +174,7 @@ export default function EpochDashboard() {
               href={addressUrl(CHAIN_IDS.SOURCE, BATCHER_ADDRESS)}
               target="_blank"
               rel="noreferrer"
-              style={{ color: "#B0F2B6" }}
+              style={{ color: "#F5D64B" }}
             >
               {shorten(BATCHER_ADDRESS, 8, 6)} ↗
             </a>{" "}

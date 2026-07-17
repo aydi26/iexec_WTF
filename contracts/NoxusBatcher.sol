@@ -110,7 +110,8 @@ contract NoxusBatcher {
     /// @dev One-shot wiring of the destination peer; enables bridging. First wire
     /// wins and is immutable after (the deploy script wires once right after deploy).
     function wirePeer(bytes32 _remoteDistributor) external {
-        if (remoteDistributor != bytes32(0)) revert AlreadyWired();
+        if (msg.sender != deployer) revert AlreadyWired(); // deployer-only: no front-run of the peer
+        if (remoteDistributor != bytes32(0)) revert AlreadyWired(); // one-shot: immutable once set
         remoteDistributor = _remoteDistributor;
         bridgeEnabled = true;
         emit PeerWired(_remoteDistributor);

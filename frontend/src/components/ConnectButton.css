@@ -11,7 +11,7 @@
   padding: 12px 22px;
   border-radius: 12px;
   border: none;
-  background: #B0F2B6;
+  background: #F5D64B;
   color: #000;
   font-size: 15px;
   font-weight: 600;
@@ -22,12 +22,12 @@
 }
 
 .connect-btn.primary:hover {
-  background: #c4f7c9;
+  background: #F8E486;
   transform: translateY(-1px);
 }
 
 .connect-btn.primary:active {
-  background: #9ce0a2;
+  background: #DDBE3A;
   transform: none;
 }
 
@@ -39,8 +39,8 @@
   padding: 12px 22px;
   border-radius: 12px;
   border: none;
-  background: rgba(176, 242, 182, 0.1);
-  color: #B0F2B6;
+  background: rgba(245, 214, 75, 0.1);
+  color: #F5D64B;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -52,7 +52,7 @@
   width: 14px;
   height: 14px;
   border: 2px solid transparent;
-  border-top-color: #B0F2B6;
+  border-top-color: #F5D64B;
   border-radius: 50%;
   animation: connect-spin 0.8s linear infinite;
 }
@@ -88,7 +88,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #B0F2B6;
+  background: #F5D64B;
 }
 
 .connect-addr-text {
@@ -204,7 +204,7 @@
 }
 
 .connect-chain-option.active {
-  color: #B0F2B6;
+  color: #F5D64B;
 }
 
 .connect-chain-option-icon {
@@ -215,7 +215,7 @@
 
 .connect-chain-check {
   margin-left: auto;
-  color: #B0F2B6;
+  color: #F5D64B;
   font-size: 14px;
 }
 
@@ -335,8 +335,8 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: rgba(176, 242, 182, 0.1);
-  color: #B0F2B6;
+  background: rgba(245, 214, 75, 0.1);
+  color: #F5D64B;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -385,7 +385,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: rgba(176, 242, 182, 0.1);
+  background: rgba(245, 214, 75, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -396,7 +396,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #B0F2B6;
+  background: #F5D64B;
 }
 
 .connect-confirm-title {
@@ -439,12 +439,12 @@
 }
 
 .connect-confirm-btn.stay {
-  background: #B0F2B6;
+  background: #F5D64B;
   color: #000;
 }
 
 .connect-confirm-btn.stay:hover {
-  background: #c4f7c9;
+  background: #F8E486;
 }
 
 .connect-confirm-btn.leave {

@@ -132,8 +132,8 @@
 }
 
 .staggered-menu-item.active {
-  color: #B0F2B6;
-  background: rgba(176, 242, 182, 0.06);
+  color: #F5D64B;
+  background: rgba(245, 214, 75, 0.06);
 }
 
 /* ===== SOCIAL ICONS ===== */
@@ -162,8 +162,8 @@
 }
 
 .staggered-menu-social:hover {
-  color: #B0F2B6;
-  background: rgba(176, 242, 182, 0.06);
+  color: #F5D64B;
+  background: rgba(245, 214, 75, 0.06);
 }
 
 .staggered-menu-social svg {

@@ -44,7 +44,7 @@
   align-items: center;
   gap: 10px;
   text-decoration: none;
-  color: #B0F2B6;
+  color: #F5D64B;
   flex-shrink: 0;
 }
 
@@ -62,7 +62,7 @@
 }
 
 .app-logo-brace {
-  color: #B0F2B6;
+  color: #F5D64B;
   font-weight: 800;
 }
 
@@ -124,7 +124,7 @@
 
 .app-footer-text {
   font-size: 12px;
-  color: #B0F2B6;
+  color: #F5D64B;
 }
 
 .app-footer-socials {
@@ -149,8 +149,8 @@
 }
 
 .app-footer-social:hover {
-  color: #B0F2B6;
-  background: rgba(176, 242, 182, 0.06);
+  color: #F5D64B;
+  background: rgba(245, 214, 75, 0.06);
 }
 
 .app-footer-social svg {

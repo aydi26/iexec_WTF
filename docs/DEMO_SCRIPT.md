@@ -37,7 +37,7 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 6. Noxus frontend — recipient's **decrypt-my-balance** view
 7. Noxus frontend — **auditor** view (grant viewer + decrypt one amount)
 
-> **Live addresses (hardened set — verify against `deployments/*.json` before shooting):** ETH Sep cUSDC `0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C`, Batcher `0x5F47142fDfC4cF7B94e347e4a7cD1A8e544453cF`; Arb Sep cUSDC `0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209`, Distributor `0xe6fbaf60232f918d83Fe66844a5A3AB31FD5B14D`.
+> **Live addresses (hardened set — verify against `deployments/*.json` before shooting):** ETH Sep cUSDC `0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C`, Batcher `0x814a70961395218365DA5892F5de768a9Ed84E37`; Arb Sep cUSDC `0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209`, Distributor `0x410195cF6137661B066d4264515C6dc9b860ECFA`.
 
 ---
 

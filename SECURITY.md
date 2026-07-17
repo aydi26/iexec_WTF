@@ -64,8 +64,10 @@ summed over — injecting, reordering, or withdrawing claims — which could bri
 **Was:** peer wiring was re-settable by the deployer, which meant a deployer could later
 redirect where the CCTP burn is sent (a trust/centralization hazard even on testnet).
 
-**Now:** `wirePeer` is **one-shot and immutable** — the cross-chain peer can be set once
-and never redirected. The deployer cannot re-point the CCTP burn destination after wiring.
+**Now:** `wirePeer` is **deployer-only AND one-shot** — the cross-chain peer can be set once,
+only by the deploying account, and never redirected. This closes both re-pointing *and* the
+deploy-time front-run window a follow-up audit flagged (a non-deployer could otherwise have set
+the peer first). Fixed in source, redeployed, and Sourcify-verified.
 
 ### F-3 — Checks-effects-interactions on the refund path — **Medium**
 
@@ -82,6 +84,17 @@ externally supplied arrays.
 
 **Now:** added **state-machine and length guards** so functions reject calls made in the
 wrong epoch state or with malformed / oversized inputs.
+
+### F-8 — CEI on the distribution path + stranded-mint edge — **Low** (follow-up audit)
+
+**Was:** `finalizeEpoch` set its `Distributed` state *after* the wrap/transfer loop; and
+`relayReceive` required state `PreRegistering`, so if nobody pre-registered, the CCTP mint
+could not be relayed (aggregate stranded in the message).
+
+**Now:** `finalizeEpoch` transitions state **before** the external calls (checks-effects-
+interactions), and `relayReceive` also accepts state `None` — an all-missing batch now mints
+and routes straight to fallback/refund-to-source, so the aggregate is never stranded. Fixed
+in source, redeployed, and Sourcify-verified.
 
 ---
 

@@ -164,8 +164,8 @@
 }
 
 .docs-sidebar-link.active {
-  background: rgba(176, 242, 182, 0.08);
-  color: #B0F2B6;
+  background: rgba(245, 214, 75, 0.08);
+  color: #F5D64B;
   font-weight: 600;
 }
 
@@ -249,7 +249,7 @@
   padding: 10px 16px;
   border-radius: 10px;
   border: none;
-  background: #B0F2B6;
+  background: #F5D64B;
   color: #000;
   font-size: 14px;
   font-weight: 600;
@@ -260,7 +260,7 @@
 }
 
 .docs-sidebar-cta-btn:hover {
-  background: #c4f7c9;
+  background: #F8E486;
   transform: translateY(-1px);
 }
 
@@ -335,7 +335,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(176, 242, 182, 0.4);
+  background: rgba(245, 214, 75, 0.4);
 }
 
 /* ===== TABLE (key-value pairs) ===== */
@@ -360,7 +360,7 @@
 .docs-table-label {
   font-size: 13px;
   font-weight: 600;
-  color: #B0F2B6;
+  color: #F5D64B;
   white-space: nowrap;
   flex-shrink: 0;
   min-width: 140px;
