@@ -214,7 +214,7 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 - [x] Day-0 (S5): **latency bench = GO-LIVE both chains** (ETH Sep prodRTT median 7.0s/p90 7.5s; Arb prodRTT 1.7s) · proof=137 B → hookData N=10 ≈ 3.3 KB ≪ 7964 B (inline fits on SIZE) · toolchain compiles (solc 0.8.35, Nox lib)
 - [ ] Day-0 remaining: **D-006** — inline fits on size but owner-binding (`ownerInProof==owner`, source-confirmed + positive bench) points to option B; confirm negative case (3rd-party submit reverts) in Phase 1 · 2 Discord confirmations (posted?)
 - [x] Wrappers  · [x] Batcher  · [x] Settlement+CCTP  (live burn→Iris→relayReceive both directions) · [x] Distributor  · [x] Integrity+fallback  · [x] Frontend  (HyperSecret shell + 5 Noxus views, builds) · [x] Auditor  (grantAuditor; add-only) · [x] **E2E no-mock: DoD ① AND ② both LIVE** · [x] Contracts verified (Sourcify exact_match ×4) · [ ] Video+X post
-- **Live + Sourcify-verified deployments:** ETH Sep — cUSDC `0xe195B0396B973C548178Eeb64DC20b9dd9B8406a`, Batcher `0x92467950c381f9CfCd4D213Bf2D67d464C5266c4` · Arb Sep — cUSDC `0x8ECc0b570536Ff5F9710E04880A0f23455d608d5`, Distributor `0xb36F257a0535fF666fFa61af553898a67dF6d863`
+- **Live + Sourcify-verified deployments (hardened set, current):** ETH Sep — cUSDC `0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C`, Batcher `0x5F47142fDfC4cF7B94e347e4a7cD1A8e544453cF` · Arb Sep — cUSDC `0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209`, Distributor `0xe6fbaf60232f918d83Fe66844a5A3AB31FD5B14D`. (Earlier redeploy sets appear only in past worklog entries.)
 
 ### Decision Log
 | ID | Decision | Alternatives | Rationale | Date |

@@ -188,10 +188,10 @@ const docsTree = [
       title: "Live Deployments (Sourcify-verified)",
       table: [
         { label: "Ethereum Sepolia", value: "Chain ID 11155111 · CCTP domain 0" },
-        { label: "NoxusBatcher (ETH)", value: "0xb2F95739f43F1cb3521d3D7057273926a1ce8076" },
+        { label: "NoxusBatcher (ETH)", value: "0x5F47142fDfC4cF7B94e347e4a7cD1A8e544453cF" },
         { label: "NoxusCUSDC (ETH)", value: "0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C" },
         { label: "Arbitrum Sepolia", value: "Chain ID 421614 · CCTP domain 3" },
-        { label: "NoxusDistributor (Arb)", value: "0xe2d5B141C4c1b57E448107f88F97a39ec5ea591D" },
+        { label: "NoxusDistributor (Arb)", value: "0xe6fbaf60232f918d83Fe66844a5A3AB31FD5B14D" },
         { label: "NoxusCUSDC (Arb)", value: "0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209" },
         { label: "CCTP TokenMessengerV2", value: "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA (both chains)" },
         { label: "CCTP MessageTransmitterV2", value: "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275 (both chains)" },

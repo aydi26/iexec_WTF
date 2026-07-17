@@ -1,3 +1,5 @@
+> **Research / roadmap — NOT the shipped design.** Noxus ships batching + unmodified CCTP V2 (see the root `README.md` and `docs/SPEC.md`). This document explores alternative rails as future work; it does not describe what is deployed.
+
 # Noxus — Alternative rails to CCTP for a single-user confidential bridge
 
 > Two research waves across CCTP, Circle Gateway, Chainlink CCIP, LayerZero (OFT/OApp),

@@ -1,3 +1,5 @@
+> **Research / roadmap — NOT the shipped design.** Noxus ships batching + unmodified CCTP V2 (see the root `README.md` and `docs/SPEC.md`). This document explores a single-user confidential-pool design as future work; it does not describe what is deployed.
+
 # Noxus — Single-user confidential bridge: is it possible?
 
 > Research synthesis from a full read of the Circle CCTP V2 docs + source, the iExec Nox

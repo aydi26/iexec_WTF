@@ -6,28 +6,21 @@
 //   Destination leg: Arb Sepolia  (421614)   — NoxusDistributor + NoxusCUSDC
 //
 // Addresses are read from the repo's deployments/<chainId>.json (copied into
-// src/deployments during the build). We read *defensively*: the 421614 file and
-// the NoxusDistributor may not exist yet, so everything falls back gracefully
-// with a clearly-marked TODO for the contracts team to wire.
+// src/deployments during the build). Both legs are deployed, wired, and
+// Sourcify-verified; we still read the destination manifest defensively via glob.
 // ============================================================================
 
 import { sepolia, arbitrumSepolia } from "viem/chains";
 
 import NoxusBatcherAbi from "../abis/NoxusBatcher.json";
 import NoxusCUSDCAbi from "../abis/NoxusCUSDC.json";
-// TODO(contracts): NoxusDistributor ABI does not exist yet. This is a
-// clearly-marked placeholder. Replace s../abis/NoxusDistributor.json
-// with the real compiled ABI (artifacts/contracts/NoxusDistributor.sol/…json)
-// once the destination-leg contract is deployed, and re-point this import.
 import NoxusDistributorAbi from "../abis/NoxusDistributor.json";
 
 // Deployment manifests copied from repo root /deployments.
 import sepoliaDeployment from "../deployments/11155111.json";
 
-// TODO(contracts): 421614.json (Arb Sepolia destination) does not exist yet.
-// import.meta.glob resolves to an empty map when the file is absent, so the build
-// never breaks. When the Distributor is deployed, drop src/deployments/421614.json
-// in and this picks it up automatically.
+// Destination (Arb Sepolia) manifest, read via glob so a missing file never
+// breaks the build.
 const destModules = import.meta.glob("../deployments/421614.json", { eager: true });
 const arbSepoliaDeployment =
   destModules["../deployments/421614.json"]?.default || {};

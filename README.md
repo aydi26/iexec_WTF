@@ -85,7 +85,7 @@ Reproduce with the scripts in [`scripts/`](scripts/) — see [Quickstart](#quick
 
 ## Live deployments
 
-All four contracts are **verified on [Sourcify](https://sourcify.dev)** and live on both testnets. They were deployed and verified before the *Noxus* rename, so on-chain metadata still shows the pre-rename contract names — the Solidity source is byte-identical. A fresh Noxus-named redeploy is a one-command step (`scripts/02_deploy_cross_chain.ts`).
+All four contracts are **verified on [Sourcify](https://sourcify.dev)** under their Noxus source names, live on both testnets at the hardened addresses below. Solidity source, deployed bytecode, and Sourcify record all match (`exact_match`).
 
 | Contract | Chain | Address |
 |---|---|---|

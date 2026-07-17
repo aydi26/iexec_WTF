@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } from "wagmi";
-import { arbitrumSepolia } from "wagmi/chains";
+import { sepolia } from "wagmi/chains";
 import arbitrumSvg from "../assets svg/1225_Arbitrum_Logomark_FullColor_ClearSpace.svg";
 import "./ConnectButton.css";
 
-const SUPPORTED_CHAIN_ID = arbitrumSepolia.id; // 421614
+// The user-facing (source) leg runs on Ethereum Sepolia — all deposit/keeper/
+// decrypt/auditor views operate there. The destination leg (Arb Sepolia) is
+// driven by the keeper scripts, so the wallet should be on ETH Sepolia.
+const SUPPORTED_CHAIN_ID = sepolia.id; // 11155111 — ETH Sepolia
 
 export default function ConnectButton() {
   const { address, isConnected } = useAccount();
@@ -105,13 +108,13 @@ export default function ConnectButton() {
                     className={`connect-chain-option ${!isWrongChain ? "active" : ""}`}
                     onClick={handleSwitchChain}
                   >
-                    <img src={arbitrumSvg} alt="Arbitrum" className="connect-chain-option-icon" />
-                    <span>Arbitrum Sepolia</span>
+                    <img src={arbitrumSvg} alt="Ethereum Sepolia" className="connect-chain-option-icon" />
+                    <span>Ethereum Sepolia</span>
                     {!isWrongChain && <span className="connect-chain-check">&#10003;</span>}
                   </button>
                   {isWrongChain && (
                     <div className="connect-chain-warning">
-                      Wrong network. Switch to Arbitrum Sepolia.
+                      Wrong network. Switch to Ethereum Sepolia.
                     </div>
                   )}
                 </div>
