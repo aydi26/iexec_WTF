@@ -42,13 +42,16 @@ const pick = (obj, ...keys) => {
   return undefined;
 };
 
+// Both chains now host BOTH a Batcher and a Distributor, so the bridge runs in
+// either direction (ETH->Arb and Arb->ETH).
 export const ADDRESSES = {
   [CHAIN_IDS.SOURCE]: {
     NoxusBatcher: pick(sepoliaDeployment, "NoxusBatcher"),
+    NoxusDistributor: pick(sepoliaDeployment, "NoxusDistributor"),
     NoxusCUSDC: pick(sepoliaDeployment, "NoxusCUSDC"),
   },
   [CHAIN_IDS.DEST]: {
-    // TODO(contracts): populate from deployments/421614.json once it exists.
+    NoxusBatcher: pick(arbSepoliaDeployment, "NoxusBatcher"),
     NoxusDistributor: pick(arbSepoliaDeployment, "NoxusDistributor"),
     NoxusCUSDC: pick(arbSepoliaDeployment, "NoxusCUSDC"),
   },
@@ -135,5 +138,63 @@ export const EPOCH_STATE = {
   3: "Refunded",
 };
 
-// USDC (underlying) on the source chain (ETH Sepolia).
+// USDC (underlying) on the source chain (ETH Sepolia) — kept for back-compat.
 export const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+
+// ---------------------------------------------------------------------------
+// Multi-chain / bidirectional routing
+// ---------------------------------------------------------------------------
+// Underlying USDC + CCTP domain + display metadata per chain.
+export const USDC_BY_CHAIN = {
+  [CHAIN_IDS.SOURCE]: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // ETH Sepolia
+  [CHAIN_IDS.DEST]: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Arb Sepolia
+};
+export const CCTP_DOMAIN = {
+  [CHAIN_IDS.SOURCE]: 0, // Ethereum
+  [CHAIN_IDS.DEST]: 3, // Arbitrum
+};
+export const CHAIN_LABEL = {
+  [CHAIN_IDS.SOURCE]: "Ethereum Sepolia",
+  [CHAIN_IDS.DEST]: "Arbitrum Sepolia",
+};
+export const CHAIN_SHORT = {
+  [CHAIN_IDS.SOURCE]: "eth",
+  [CHAIN_IDS.DEST]: "arb",
+};
+
+// The available bridge directions. The Batcher sits on the source chain, the
+// Distributor on the destination chain.
+export const ROUTES = [
+  { key: "eth-arb", srcChainId: CHAIN_IDS.SOURCE, dstChainId: CHAIN_IDS.DEST },
+  { key: "arb-eth", srcChainId: CHAIN_IDS.DEST, dstChainId: CHAIN_IDS.SOURCE },
+];
+
+// Build the full descriptor runConfidentialBridge consumes for a given direction.
+export function buildRoute(routeKey) {
+  const r = ROUTES.find((x) => x.key === routeKey) || ROUTES[0];
+  const s = r.srcChainId;
+  const d = r.dstChainId;
+  return {
+    key: r.key,
+    srcChainId: s,
+    dstChainId: d,
+    srcDomain: CCTP_DOMAIN[s],
+    dstDomain: CCTP_DOMAIN[d],
+    batcher: ADDRESSES[s]?.NoxusBatcher,
+    distributor: ADDRESSES[d]?.NoxusDistributor,
+    cusdc: ADDRESSES[s]?.NoxusCUSDC,
+    destCusdc: ADDRESSES[d]?.NoxusCUSDC,
+    usdc: USDC_BY_CHAIN[s],
+    srcLabel: CHAIN_LABEL[s],
+    dstLabel: CHAIN_LABEL[d],
+    srcShort: CHAIN_SHORT[s],
+    dstShort: CHAIN_SHORT[d],
+  };
+}
+
+// True when both directional pairs are wired (enables the swap toggle).
+export const BIDIRECTIONAL_READY =
+  !!ADDRESSES[CHAIN_IDS.SOURCE].NoxusBatcher &&
+  !!ADDRESSES[CHAIN_IDS.SOURCE].NoxusDistributor &&
+  !!ADDRESSES[CHAIN_IDS.DEST].NoxusBatcher &&
+  !!ADDRESSES[CHAIN_IDS.DEST].NoxusDistributor;

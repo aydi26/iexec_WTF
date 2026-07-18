@@ -4,9 +4,11 @@
 // and a Track tab (the live step tracker + final "bilan"). The user enters one
 // amount + one destination; everything else — wrap, pre-register, deposit,
 // batch, CCTP bridge, TEE integrity check, distribution — runs in the
-// background (documented on the Resources page). A k=3 batch is met with two
-// automatic filler transfers back to the sender. Orchestration is delegated
-// UNCHANGED to runConfidentialBridge in ../../lib/bridge.js.
+// background. A k=3 batch is met with two automatic filler transfers back to the
+// sender. Orchestration is delegated UNCHANGED to runConfidentialBridge.
+//
+// BIDIRECTIONAL: the swap pill flips the route (ETH->Arb <-> Arb->ETH); both
+// directional pairs are deployed, so the same widget bridges either way.
 // ============================================================================
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
@@ -14,11 +16,11 @@ import { useAccount, useConfig, usePublicClient, useSwitchChain } from "wagmi";
 import { getWalletClient } from "wagmi/actions";
 import {
   CHAIN_IDS,
-  DISTRIBUTOR_ADDRESS,
-  DEST_CUSDC_ADDRESS,
-  BATCHER_ADDRESS,
   BATCHER_ABI,
   DISTRIBUTOR_ABI,
+  ROUTES,
+  buildRoute,
+  BIDIRECTIONAL_READY,
   txUrl,
 } from "../../config/contracts";
 import { parseUsdc, formatUsdc, isHex } from "./format";
@@ -34,8 +36,8 @@ const FILLER_UNITS = [20_000n, 30_000n]; // 0.02 + 0.03 cUSD, returned to you
 
 const STEP_GROUPS = [
   { title: "Read epoch", short: "Epoch", keys: ["epoch"] },
-  { title: "Pre-register on Arbitrum", short: "Pre-register", keys: ["switch-arb-pre", "prereg-0", "prereg-1", "prereg-2"] },
-  { title: "Wrap + deposit on Ethereum", short: "Deposit", keys: ["switch-eth", "fund", "deposit-0", "deposit-1", "deposit-2"] },
+  { title: "Pre-register (destination)", short: "Pre-register", keys: ["switch-arb-pre", "prereg-0", "prereg-1", "prereg-2"] },
+  { title: "Wrap + deposit (source)", short: "Deposit", keys: ["switch-eth", "fund", "deposit-0", "deposit-1", "deposit-2"] },
   { title: "Close epoch", short: "Close", keys: ["close"] },
   { title: "Settle + CCTP burn", short: "Settle + burn", keys: ["settle"] },
   { title: "CCTP relay", short: "CCTP relay", keys: ["relay-attest", "switch-arb-relay", "relay"] },
@@ -45,27 +47,27 @@ const STEP_GROUPS = [
 ];
 
 const STEP_META = {
-  epoch: { label: "Read current epoch", chainId: CHAIN_IDS.SOURCE },
-  "switch-arb-pre": { label: "Switch → Arbitrum Sepolia", chainId: CHAIN_IDS.DEST },
-  "prereg-0": { label: "Pre-register your transfer", chainId: CHAIN_IDS.DEST },
-  "prereg-1": { label: "Pre-register filler 1", chainId: CHAIN_IDS.DEST },
-  "prereg-2": { label: "Pre-register filler 2", chainId: CHAIN_IDS.DEST },
-  "switch-eth": { label: "Switch → Ethereum Sepolia", chainId: CHAIN_IDS.SOURCE },
-  fund: { label: "Wrap USDC → cUSDC + authorize batcher", chainId: CHAIN_IDS.SOURCE },
-  "deposit-0": { label: "Deposit your transfer (encrypted)", chainId: CHAIN_IDS.SOURCE },
-  "deposit-1": { label: "Deposit filler 1 (encrypted)", chainId: CHAIN_IDS.SOURCE },
-  "deposit-2": { label: "Deposit filler 2 (encrypted)", chainId: CHAIN_IDS.SOURCE },
-  close: { label: "Close epoch", chainId: CHAIN_IDS.SOURCE },
-  settle: { label: "Settle + CCTP fast-burn", chainId: CHAIN_IDS.SOURCE },
-  "relay-attest": { label: "Poll Circle Iris attestation", chainId: CHAIN_IDS.SOURCE },
-  "switch-arb-relay": { label: "Switch → Arbitrum Sepolia", chainId: CHAIN_IDS.DEST },
-  relay: { label: "Relay mint (relayReceive)", chainId: CHAIN_IDS.DEST },
-  check: { label: "Integrity check (Sum == A)", chainId: CHAIN_IDS.DEST },
-  finalize: { label: "Confidential distribution", chainId: CHAIN_IDS.DEST },
-  done: { label: "Decrypt recipient balance", chainId: CHAIN_IDS.DEST },
+  epoch: { label: "Read current epoch" },
+  "switch-arb-pre": { label: "Switch to the destination chain" },
+  "prereg-0": { label: "Pre-register your transfer" },
+  "prereg-1": { label: "Pre-register filler 1" },
+  "prereg-2": { label: "Pre-register filler 2" },
+  "switch-eth": { label: "Switch to the source chain" },
+  fund: { label: "Wrap USDC → cUSDC + authorize batcher" },
+  "deposit-0": { label: "Deposit your transfer (encrypted)" },
+  "deposit-1": { label: "Deposit filler 1 (encrypted)" },
+  "deposit-2": { label: "Deposit filler 2 (encrypted)" },
+  close: { label: "Close epoch" },
+  settle: { label: "Settle + CCTP fast-burn" },
+  "relay-attest": { label: "Poll Circle Iris attestation" },
+  "switch-arb-relay": { label: "Switch to the destination chain" },
+  relay: { label: "Relay mint (relayReceive)" },
+  check: { label: "Integrity check (Sum == A)" },
+  finalize: { label: "Confidential distribution" },
+  done: { label: "Decrypt recipient balance" },
 };
 
-// ---- inline glyphs (match the widget markup) -------------------------------
+// ---- inline glyphs ---------------------------------------------------------
 const UsdcBadge = ({ chain, small }) => (
   <div className={`bridge-badge ${small ? "small" : ""}`}>
     <div className="bridge-badge-token">
@@ -127,13 +129,15 @@ const fmtElapsed = (ms) => {
 export default function BridgeFlow() {
   const { address, isConnected } = useAccount();
   const config = useConfig();
-  const publicClientSource = usePublicClient({ chainId: CHAIN_IDS.SOURCE });
-  const publicClientDest = usePublicClient({ chainId: CHAIN_IDS.DEST });
+  const publicClientEth = usePublicClient({ chainId: CHAIN_IDS.SOURCE });
+  const publicClientArb = usePublicClient({ chainId: CHAIN_IDS.DEST });
   const { switchChainAsync } = useSwitchChain();
+  const clientFor = (chainId) => (chainId === CHAIN_IDS.SOURCE ? publicClientEth : publicClientArb);
 
   const [view, setView] = useState("bridge"); // 'bridge' | 'track'
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recipientOpen, setRecipientOpen] = useState(true);
+  const [direction, setDirection] = useState(ROUTES[0].key); // 'eth-arb' | 'arb-eth'
 
   const [amount, setAmount] = useState("0.05");
   const [destination, setDestination] = useState("");
@@ -146,12 +150,12 @@ export default function BridgeFlow() {
   const runningRef = useRef(false);
   const startRef = useRef(0);
 
-  // Track tab: on-chain scan of every started-but-not-complete bridge (epoch).
   const [bridges, setBridges] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState(null);
 
-  const configReady = !!BATCHER_ADDRESS && !!DISTRIBUTOR_ADDRESS && !!DEST_CUSDC_ADDRESS;
+  const route = buildRoute(direction);
+  const configReady = !!route.batcher && !!route.distributor && !!route.destCusdc;
   const me = address || "";
   const destAddr = (destination || "").trim() || me;
   const amountUnits = parseUsdc(amount);
@@ -161,7 +165,7 @@ export default function BridgeFlow() {
   const onStep = useCallback((key, status, detail, txHash, chainId) => {
     setSteps((s) => ({
       ...s,
-      [key]: { status, detail, txHash: txHash ?? s[key]?.txHash, chainId: chainId ?? s[key]?.chainId ?? STEP_META[key]?.chainId },
+      [key]: { status, detail, txHash: txHash ?? s[key]?.txHash, chainId: chainId ?? s[key]?.chainId },
     }));
   }, []);
 
@@ -172,14 +176,14 @@ export default function BridgeFlow() {
     setSteps({});
     setElapsed(null);
     if (!isConnected) return setError("Connect your wallet to bridge.");
-    if (!configReady) return setError("Bridge addresses are not configured.");
+    if (!configReady) return setError("Bridge addresses are not configured for this direction.");
     if (amountUnits == null || amountUnits <= 0n) return setError("Enter a positive amount.");
     if (!isHex(destAddr, 20)) return setError("Enter a valid 0x destination address.");
 
     setRunning(true);
     runningRef.current = true;
     startRef.current = Date.now();
-    setSent({ amount: amountUnits, dest: destAddr });
+    setSent({ amount: amountUnits, dest: destAddr, route });
     setView("track");
     try {
       const transfers = [
@@ -190,9 +194,10 @@ export default function BridgeFlow() {
       const res = await runConfidentialBridge({
         getWalletClient: (chainId) => getWalletClient(config, { chainId }),
         switchChainAsync,
-        publicClientSource,
-        publicClientDest,
+        publicClientSource: clientFor(route.srcChainId),
+        publicClientDest: clientFor(route.dstChainId),
         transfers,
+        route,
         onStep,
       });
       setElapsed(Date.now() - startRef.current);
@@ -216,6 +221,12 @@ export default function BridgeFlow() {
     setView("bridge");
   }
 
+  function toggleDirection() {
+    if (running) return;
+    const i = ROUTES.findIndex((r) => r.key === direction);
+    setDirection(ROUTES[(i + 1) % ROUTES.length].key);
+  }
+
   const groupStatus = (keys) => {
     const sts = keys.map((k) => steps[k]?.status).filter(Boolean);
     if (sts.includes("error")) return "error";
@@ -225,71 +236,70 @@ export default function BridgeFlow() {
     return "pending";
   };
 
-  // Scan every epoch on both contracts and surface the ones that were started but
-  // are NOT complete yet (not Distributed / not Refunded) — i.e. bridges in flight.
+  // Scan BOTH directions: for each route, list the epochs on its Batcher that are
+  // started but not complete on its Distributor — every bridge in flight.
   const scanBridges = useCallback(async () => {
-    if (!publicClientSource || !BATCHER_ADDRESS) return;
     setScanning(true);
     setScanError(null);
     try {
-      const cur = await publicClientSource.readContract({
-        address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "currentEpoch",
-      });
-      const ids = [];
-      for (let i = 0n; i <= cur; i++) ids.push(i);
-      const rows = await Promise.all(ids.map(async (id) => {
-        const b = await publicClientSource.readContract({
-          address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "epochInfo", args: [id],
-        });
-        let d = null;
-        if (publicClientDest && DISTRIBUTOR_ADDRESS) {
-          try {
-            d = await publicClientDest.readContract({
-              address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "epochInfo", args: [id],
-            });
-          } catch { d = null; }
+      const all = [];
+      for (const rd of ROUTES) {
+        const r = buildRoute(rd.key);
+        const srcClient = clientFor(r.srcChainId);
+        const dstClient = clientFor(r.dstChainId);
+        if (!srcClient || !r.batcher) continue;
+        const cur = await srcClient.readContract({ address: r.batcher, abi: BATCHER_ABI, functionName: "currentEpoch" });
+        const ids = [];
+        for (let i = 0n; i <= cur; i++) ids.push(i);
+        const rows = await Promise.all(ids.map(async (id) => {
+          const b = await srcClient.readContract({ address: r.batcher, abi: BATCHER_ABI, functionName: "epochInfo", args: [id] });
+          let d = null;
+          if (dstClient && r.distributor) {
+            try { d = await dstClient.readContract({ address: r.distributor, abi: DISTRIBUTOR_ABI, functionName: "epochInfo", args: [id] }); } catch { d = null; }
+          }
+          return { id, b, d };
+        }));
+        const dir = `${r.srcShort.toUpperCase()} → ${r.dstShort.toUpperCase()}`;
+        for (const { id, b, d } of rows) {
+          const bState = Number(b[0]);
+          const activeCount = Number(b[1]);
+          const bAgg = b[2];
+          const refunded = b[3];
+          const entryCount = Number(b[4]);
+          const dState = d ? Number(d[0]) : 0;
+          const dAgg = d ? d[1] : 0n;
+          const started = entryCount > 0 || dState !== 0;
+          const complete = dState === 4 || dState === 6 || refunded === true;
+          if (!started || complete) continue;
+          let phase, agg = null;
+          if (dState >= 1) {
+            agg = dAgg;
+            phase =
+              dState === 1 ? `Pre-registered — awaiting CCTP relay on ${r.dstLabel}` :
+              dState === 2 ? "Relayed — awaiting integrity check" :
+              dState === 3 ? "Checked — awaiting finalize + distribution" :
+              dState === 5 ? "Integrity failed — awaiting refund to source" :
+              "In progress";
+          } else {
+            phase =
+              bState === 0 ? `Collecting deposits (${activeCount}/3)` :
+              bState === 1 ? "Closed — awaiting settle + CCTP burn" :
+              bState === 2 ? `Bridged via CCTP — awaiting relay on ${r.dstLabel}` :
+              "In progress";
+            if (bState === 2) agg = bAgg;
+          }
+          all.push({ id: id.toString(), dir, phase, agg, key: `${rd.key}-${id}` });
         }
-        return { id, b, d };
-      }));
-      const inflight = rows.map(({ id, b, d }) => {
-        const bState = Number(b[0]);       // 0 Open, 1 Closed, 2 Settled, 3 Refunded
-        const activeCount = Number(b[1]);
-        const bAgg = b[2];
-        const refunded = b[3];
-        const entryCount = Number(b[4]);
-        const dState = d ? Number(d[0]) : 0; // 0 None..4 Distributed..6 RefundInitiated
-        const dAgg = d ? d[1] : 0n;
-        const started = entryCount > 0 || dState !== 0;
-        const complete = dState === 4 || dState === 6 || refunded === true;
-        if (!started || complete) return null;
-        let phase, agg = null;
-        if (dState >= 1) {
-          agg = dAgg;
-          phase =
-            dState === 1 ? "Pre-registered — awaiting CCTP relay on Arbitrum" :
-            dState === 2 ? "Relayed — awaiting integrity check" :
-            dState === 3 ? "Checked — awaiting finalize + distribution" :
-            dState === 5 ? "Integrity failed — awaiting refund to source" :
-            "In progress";
-        } else {
-          phase =
-            bState === 0 ? `Collecting deposits (${activeCount}/3)` :
-            bState === 1 ? "Closed — awaiting settle + CCTP burn" :
-            bState === 2 ? "Bridged via CCTP — awaiting relay on Arbitrum" :
-            "In progress";
-          if (bState === 2) agg = bAgg;
-        }
-        return { id: id.toString(), phase, agg, bState, dState };
-      }).filter(Boolean);
-      setBridges(inflight);
+      }
+      setBridges(all);
     } catch (e) {
       setScanError(e?.shortMessage || e?.message?.slice(0, 160) || "Scan failed");
     } finally {
       setScanning(false);
     }
-  }, [publicClientSource, publicClientDest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicClientEth, publicClientArb]);
 
-  // Refresh the in-flight board whenever the Track tab is opened or a run finishes.
   useEffect(() => {
     if (view === "track") scanBridges();
   }, [view, result, scanBridges]);
@@ -297,6 +307,7 @@ export default function BridgeFlow() {
   const started = Object.keys(steps).length > 0;
   const txOf = (k) => steps[k]?.txHash;
   const usd = (Number(amount) || 0).toFixed(2);
+  const sentRoute = sent?.route || route;
 
   const ctaLabel = !isConnected
     ? "Connect wallet"
@@ -308,7 +319,6 @@ export default function BridgeFlow() {
 
   return (
     <div className="bridge-widget">
-      {/* ---- header ---- */}
       <div className="bridge-header">
         <div className="bridge-header-left">
           <span className="bridge-title">Exchange</span>
@@ -317,11 +327,7 @@ export default function BridgeFlow() {
             <button className={`bridge-tab ${view === "track" ? "active" : ""}`} onClick={() => setView("track")}>Track</button>
           </div>
         </div>
-        <button
-          className={`bridge-settings-btn ${settingsOpen ? "active" : ""}`}
-          title="About"
-          onClick={() => setSettingsOpen((o) => !o)}
-        >
+        <button className={`bridge-settings-btn ${settingsOpen ? "active" : ""}`} title="About" onClick={() => setSettingsOpen((o) => !o)}>
           <SettingsIcon />
         </button>
       </div>
@@ -341,46 +347,52 @@ export default function BridgeFlow() {
       {/* ================= BRIDGE TAB ================= */}
       {view === "bridge" && (
         <div className="bridge-body">
-          {!configReady && <div className="mf-note todo">Bridge addresses are not configured — bridging is disabled.</div>}
+          {!configReady && <div className="mf-note todo">Bridge addresses are not configured for this direction.</div>}
 
           <div className="bridge-card">
             <div className="bridge-card-content">
               <p className="bridge-card-label">From</p>
               <div className="bridge-card-header">
-                <UsdcBadge chain="eth" />
+                <UsdcBadge chain={route.srcShort} />
                 <div className="bridge-card-text">
                   <span className="bridge-card-title">USDC</span>
-                  <span className="bridge-card-subtitle">on Ethereum Sepolia</span>
+                  <span className="bridge-card-subtitle">on {route.srcLabel}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="bridge-swap-wrapper">
-            <div className="bridge-swap-pill"><SwapArrow /></div>
+            <button
+              className="bridge-swap-pill"
+              onClick={toggleDirection}
+              disabled={running || !BIDIRECTIONAL_READY}
+              title="Reverse direction"
+            >
+              <SwapArrow />
+            </button>
           </div>
 
           <div className="bridge-card">
             <div className="bridge-card-content">
               <p className="bridge-card-label">To</p>
               <div className="bridge-card-header">
-                <UsdcBadge chain="arb" />
+                <UsdcBadge chain={route.dstShort} />
                 <div className="bridge-card-text">
                   <span className="bridge-card-title">USDC</span>
-                  <span className="bridge-card-subtitle">on Arbitrum Sepolia</span>
+                  <span className="bridge-card-subtitle">on {route.dstLabel}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ---- send card ---- */}
           <div className="bridge-send-card">
             <div className="bridge-send-header">
               <p className="bridge-send-label">Send</p>
               <span className="bridge-send-label">confidential</span>
             </div>
             <div className="bridge-send-body">
-              <UsdcBadge chain="eth" small />
+              <UsdcBadge chain={route.srcShort} small />
               <div className="bridge-send-input-area">
                 <input
                   className="bridge-send-input"
@@ -402,27 +414,21 @@ export default function BridgeFlow() {
             </div>
           </div>
 
-          {/* ---- actions ---- */}
           <div className="bridge-actions">
             <button className="bridge-btn primary" disabled={!formValid || running} onClick={run}>
               {running && <span className="mf-spinner" />} {ctaLabel}
             </button>
-            <button
-              className={`bridge-wallet-btn ${recipientOpen ? "active" : ""}`}
-              title="Recipient address"
-              onClick={() => setRecipientOpen((o) => !o)}
-            >
+            <button className={`bridge-wallet-btn ${recipientOpen ? "active" : ""}`} title="Recipient address" onClick={() => setRecipientOpen((o) => !o)}>
               <WalletIcon />
             </button>
           </div>
 
-          {/* ---- recipient ---- */}
           <div className={`bridge-recipient-area ${recipientOpen ? "open" : ""}`}>
             <div className="bridge-recipient-card">
               <div className="bridge-recipient-header">
                 <WalletIcon size={16} />
                 <span className="bridge-recipient-title">
-                  Recipient on Arbitrum Sepolia {(!destination || !destination.trim()) && "· defaults to you"}
+                  Recipient on {route.dstLabel} {(!destination || !destination.trim()) && "· defaults to you"}
                 </span>
               </div>
               <input
@@ -448,19 +454,19 @@ export default function BridgeFlow() {
               <div className="bf-result-title">Bridged confidentially</div>
               <div className="bf-result-sub">
                 {sent ? formatUsdc(sent.amount) : "—"} cUSD delivered to{" "}
-                {sent ? shorten(sent.dest, 6, 4) : "—"} on Arbitrum Sepolia.
+                {sent ? shorten(sent.dest, 6, 4) : "—"} on {sentRoute.dstLabel}.
               </div>
               {result.revealedBalance != null && (
                 <div className="bf-result-reveal">
                   {formatUsdc(result.revealedBalance)} cUSD
-                  <small>your Arbitrum balance, decrypted locally in your browser</small>
+                  <small>your {sentRoute.dstLabel} balance, decrypted locally in your browser</small>
                 </div>
               )}
               <div className="bf-result-details">
                 {[
                   ["Your transfer", `${sent ? formatUsdc(sent.amount) : "—"} cUSD`],
                   ["Destination", sent ? shorten(sent.dest, 8, 6) : "—"],
-                  ["Route", "Ethereum → Arbitrum Sepolia"],
+                  ["Route", `${sentRoute.srcLabel} → ${sentRoute.dstLabel}`],
                   ["Public aggregate A", result.aggregate != null ? `${formatUsdc(result.aggregate)} USDC` : "—"],
                   ["Epoch", `#${result.epochId?.toString()}`],
                   ["Elapsed", elapsed != null ? fmtElapsed(elapsed) : "—"],
@@ -470,10 +476,10 @@ export default function BridgeFlow() {
               </div>
               {(() => {
                 const links = [
-                  ["Deposit (encrypted)", txOf("deposit-0"), CHAIN_IDS.SOURCE],
-                  ["Settle + CCTP burn", result.settleTxHash, CHAIN_IDS.SOURCE],
-                  ["Relay mint", txOf("relay"), CHAIN_IDS.DEST],
-                  ["Confidential distribution", txOf("finalize"), CHAIN_IDS.DEST],
+                  ["Deposit (encrypted)", txOf("deposit-0"), sentRoute.srcChainId],
+                  ["Settle + CCTP burn", result.settleTxHash, sentRoute.srcChainId],
+                  ["Relay mint", txOf("relay"), sentRoute.dstChainId],
+                  ["Confidential distribution", txOf("finalize"), sentRoute.dstChainId],
                 ].filter(([, h]) => !!h);
                 return links.length ? (
                   <div className="bf-result-details" style={{ marginTop: 10 }}>
@@ -515,9 +521,9 @@ export default function BridgeFlow() {
                               <span className="txt">{meta.label || k}</span>
                             </div>
                             {s.detail && <div className="bf-substep-detail">{s.detail}</div>}
-                            {s.txHash && (
+                            {s.txHash && s.chainId && (
                               <div className="bf-substep-tx">
-                                <a href={txUrl(s.chainId ?? meta.chainId, s.txHash)} target="_blank" rel="noreferrer">{shorten(s.txHash, 10, 8)} ↗</a>
+                                <a href={txUrl(s.chainId, s.txHash)} target="_blank" rel="noreferrer">{shorten(s.txHash, 10, 8)} ↗</a>
                               </div>
                             )}
                           </div>
@@ -537,7 +543,7 @@ export default function BridgeFlow() {
             </>
           ) : null}
 
-          {/* in-flight bridges: every started epoch that is not complete yet */}
+          {/* in-flight bridges (both directions): every started epoch not complete yet */}
           <div className="bf-board">
             <div className="bf-board-head">
               <span>Bridges in progress</span>
@@ -547,14 +553,12 @@ export default function BridgeFlow() {
             </div>
             {scanError && <div className="mf-error">{scanError}</div>}
             {!scanning && !scanError && bridges.length === 0 && (
-              <div className="bf-track-empty">
-                No bridges in progress — every started epoch is complete.
-              </div>
+              <div className="bf-track-empty">No bridges in progress — every started epoch is complete.</div>
             )}
             {bridges.map((b) => (
-              <div className="bf-board-row" key={b.id}>
+              <div className="bf-board-row" key={b.key}>
                 <div className="bf-board-left">
-                  <span className="bf-board-epoch">Epoch #{b.id}</span>
+                  <span className="bf-board-epoch">{b.dir} · Epoch #{b.id}</span>
                   <span className="bf-board-phase">{b.phase}</span>
                 </div>
                 {b.agg != null && b.agg > 0n && (

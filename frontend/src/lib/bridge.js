@@ -23,15 +23,9 @@
 
 import { createViemHandleClient } from "@iexec-nox/handle";
 import {
-  CHAIN_IDS,
-  BATCHER_ADDRESS,
   BATCHER_ABI,
-  CUSDC_ADDRESS,
   CUSDC_ABI,
-  DISTRIBUTOR_ADDRESS,
   DISTRIBUTOR_ABI,
-  DEST_CUSDC_ADDRESS,
-  USDC_ADDRESS,
   ERC20_ABI,
   FAR_FUTURE_EXPIRY,
 } from "../config/contracts";
@@ -134,20 +128,18 @@ async function publicDecryptWithRetry(handleClient, handle, onWait, timeoutMs = 
   }
 }
 
-// CCTP domains: ETH Sepolia = 0 (source), Arb Sepolia = 3 (dest).
-const SRC_DOMAIN = 0;
-const DST_DOMAIN = 3;
-
 /**
- * Run the full confidential cross-chain bridge.
+ * Run the full confidential cross-chain bridge in the direction described by `route`.
  *
  * @param {object}   o
  * @param {(chainId:number)=>Promise<import('viem').WalletClient>} o.getWalletClient
  *        returns a FRESH wallet client bound to `chainId` (call after each switch).
  * @param {(a:{chainId:number})=>Promise<any>} o.switchChainAsync  switch the wallet.
- * @param {import('viem').PublicClient} o.publicClientSource  ETH Sepolia reader.
- * @param {import('viem').PublicClient} o.publicClientDest    Arb Sepolia reader.
+ * @param {import('viem').PublicClient} o.publicClientSource  source-chain reader.
+ * @param {import('viem').PublicClient} o.publicClientDest    destination-chain reader.
  * @param {Array<{recipient:`0x${string}`, amount:bigint}>} o.transfers  length 3.
+ * @param {object} o.route  direction: {srcChainId,dstChainId,srcDomain,dstDomain,
+ *        batcher,distributor,cusdc,destCusdc,usdc}.
  * @param {(key:string,status:'pending'|'active'|'done'|'error',detail?:string,txHash?:string,chainId?:number)=>void} o.onStep
  * @returns {Promise<{epochId:bigint, aggregate:bigint, settleTxHash:string, revealedBalance?:bigint}>}
  */
@@ -157,10 +149,25 @@ export async function runConfidentialBridge({
   publicClientSource,
   publicClientDest,
   transfers,
+  route,
   onStep,
 }) {
   const step = (key, status, detail, txHash, chainId) =>
     onStep?.(key, status, detail, txHash, chainId);
+
+  // Direction comes entirely from `route`; the rest of this function is
+  // direction-agnostic (same names the body already uses).
+  const {
+    srcChainId: SRC,
+    dstChainId: DST,
+    srcDomain: SRC_DOMAIN,
+    dstDomain: DST_DOMAIN,
+    batcher: BATCHER_ADDRESS,
+    distributor: DISTRIBUTOR_ADDRESS,
+    cusdc: CUSDC_ADDRESS,
+    destCusdc: DEST_CUSDC_ADDRESS,
+    usdc: USDC_ADDRESS,
+  } = route || {};
 
   // ---- preflight ---------------------------------------------------------
   if (!BATCHER_ADDRESS || !CUSDC_ADDRESS || !USDC_ADDRESS) {
@@ -182,8 +189,6 @@ export async function runConfidentialBridge({
   }
 
   const total = transfers.reduce((a, t) => a + t.amount, 0n);
-  const SRC = CHAIN_IDS.SOURCE;
-  const DST = CHAIN_IDS.DEST;
 
   const waitSrc = (hash) => publicClientSource.waitForTransactionReceipt({ hash });
   const waitDst = (hash) => publicClientDest.waitForTransactionReceipt({ hash });
