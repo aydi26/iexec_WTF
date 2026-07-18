@@ -85,16 +85,18 @@ Reproduce with the scripts in [`scripts/`](scripts/) — see [Quickstart](#quick
 
 ## Live deployments
 
-All four contracts are **verified on [Sourcify](https://sourcify.dev)** under their Noxus source names, live on both testnets at the hardened addresses below. Solidity source, deployed bytecode, and Sourcify record all match (`exact_match`).
+The bridge is **bidirectional** — every chain hosts both a `NoxusBatcher` and a `NoxusDistributor`, so it settles either way (ETH→Arb *and* Arb→ETH). Both directional pairs are proven live end-to-end, and all six contracts are **verified on [Sourcify](https://sourcify.dev)** (`exact_match`) under their Noxus source names.
 
-| Contract | Chain | Address |
-|---|---|---|
-| `NoxusBatcher` | ETH Sepolia | [`0x814a70961395218365DA5892F5de768a9Ed84E37`](https://sepolia.etherscan.io/address/0x814a70961395218365DA5892F5de768a9Ed84E37) |
-| `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C`](https://sepolia.etherscan.io/address/0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C) |
-| `NoxusDistributor` | Arb Sepolia | [`0x410195cF6137661B066d4264515C6dc9b860ECFA`](https://sepolia.arbiscan.io/address/0x410195cF6137661B066d4264515C6dc9b860ECFA) |
-| `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209`](https://sepolia.arbiscan.io/address/0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209) |
+| Contract | Chain | Address | Role |
+|---|---|---|---|
+| `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0x47d150…e41C`](https://sepolia.etherscan.io/address/0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C) | confidential USDC |
+| `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0xD74A1F…0209`](https://sepolia.arbiscan.io/address/0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209) | confidential USDC |
+| `NoxusBatcher` | ETH Sepolia | [`0x814a70…4E37`](https://sepolia.etherscan.io/address/0x814a70961395218365DA5892F5de768a9Ed84E37) | source · ETH→Arb |
+| `NoxusDistributor` | Arb Sepolia | [`0x410195…0ECFA`](https://sepolia.arbiscan.io/address/0x410195cF6137661B066d4264515C6dc9b860ECFA) | dest · ETH→Arb |
+| `NoxusBatcher` | Arb Sepolia | [`0x47Cd12…4d30`](https://sepolia.arbiscan.io/address/0x47Cd125B48970D899bD9C7434187a8C5c5214d30) | source · Arb→ETH |
+| `NoxusDistributor` | ETH Sepolia | [`0x073A21…bfb0`](https://sepolia.etherscan.io/address/0x073A213Be93EC6B5aD830e466DA95603450bbfb0) | dest · Arb→ETH |
 
-> Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3.
+> Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3. The contracts are direction-agnostic (CCTP domain + remote peer are constructor params), so a new chain is a deploy + wire once iExec Nox extends beyond these two testnets.
 
 ## The app
 
