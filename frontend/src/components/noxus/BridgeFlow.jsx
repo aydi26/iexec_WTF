@@ -32,7 +32,7 @@ import "./BridgeFlow.css";
 
 // Two automatic background fillers (paid back to the sender) that lift the batch
 // to the k-anonymity floor of 3. Never shown as inputs.
-const FILLER_UNITS = [200_000n, 200_000n]; // 0.20 + 0.20 cUSD (equal, liquidity margin), returned to you
+const FILLER_UNITS = [20_000_000n, 20_000_000n]; // 20 + 20 cUSD (equal, liquidity margin), returned to you
 const MAX_AMOUNT_UNITS = 1_000_000n; // hard cap: max 1 USDC per bridge (testnet)
 
 const STEP_GROUPS = [
