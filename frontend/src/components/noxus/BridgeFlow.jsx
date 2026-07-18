@@ -32,7 +32,8 @@ import "./BridgeFlow.css";
 
 // Two automatic background fillers (paid back to the sender) that lift the batch
 // to the k-anonymity floor of 3. Never shown as inputs.
-const FILLER_UNITS = [50_000n, 50_000n]; // 0.05 + 0.05 cUSD (equal parts), returned to you
+const FILLER_UNITS = [200_000n, 200_000n]; // 0.20 + 0.20 cUSD (equal, liquidity margin), returned to you
+const MAX_AMOUNT_UNITS = 1_000_000n; // hard cap: max 1 USDC per bridge (testnet)
 
 const STEP_GROUPS = [
   { title: "Read epoch", short: "Epoch", keys: ["epoch"] },
@@ -159,8 +160,10 @@ export default function BridgeFlow() {
   const me = address || "";
   const destAddr = (destination || "").trim() || me;
   const amountUnits = parseUsdc(amount);
+  const amountTooBig = amountUnits != null && amountUnits > MAX_AMOUNT_UNITS;
   const destBad = (destination || "").trim() !== "" && !isHex(destination.trim(), 20);
-  const formValid = isConnected && configReady && amountUnits != null && amountUnits > 0n && isHex(destAddr, 20);
+  const formValid =
+    isConnected && configReady && amountUnits != null && amountUnits > 0n && !amountTooBig && isHex(destAddr, 20);
 
   const onStep = useCallback((key, status, detail, txHash, chainId) => {
     setSteps((s) => ({
@@ -178,6 +181,7 @@ export default function BridgeFlow() {
     if (!isConnected) return setError("Connect your wallet to bridge.");
     if (!configReady) return setError("Bridge addresses are not configured for this direction.");
     if (amountUnits == null || amountUnits <= 0n) return setError("Enter a positive amount.");
+    if (amountUnits > MAX_AMOUNT_UNITS) return setError("Max 1 USDC per bridge (testnet cap).");
     if (!isHex(destAddr, 20)) return setError("Enter a valid 0x destination address.");
 
     setRunning(true);
@@ -334,11 +338,13 @@ export default function BridgeFlow() {
 
       {settingsOpen && (
         <div className="bridge-settings-panel">
-          <div className="bridge-settings-row"><LockIcon size={13} /> Confidential batch · <strong>k = 3</strong></div>
+          <div className="bridge-settings-row">Confidential batch · <strong>k = 3</strong></div>
           <p>
-            Your amount is encrypted in your browser via iExec Nox. Privacy needs a crowd,
-            so your transfer is bundled with 2 tiny fillers (returned to you) into a k=3
-            batch. Only the public aggregate A is ever revealed.{" "}
+            Amounts are encrypted client-side with iExec Nox (ERC-7984) and never touch the
+            blockchain in cleartext. To preserve k-anonymity, every transfer settles inside a
+            batch of at least three — yours plus two fillers that are returned to you. Only the
+            batch aggregate, a single figure decoupled from any individual amount, is ever made
+            public.{" "}
             <Link to="/resources" className="bf-doclink">How it works ↗</Link>
           </p>
         </div>
@@ -408,7 +414,9 @@ export default function BridgeFlow() {
                 />
                 <div className="bridge-send-helper">
                   <span className="bridge-send-usd">${usd}</span>
-                  <span className="bridge-send-balance">cUSD · hidden on-chain</span>
+                  <span className="bridge-send-balance" style={amountTooBig ? { color: "#ff6b6b" } : undefined}>
+                    {amountTooBig ? "max 1 USDC per bridge" : "cUSD · hidden on-chain"}
+                  </span>
                 </div>
               </div>
             </div>
