@@ -52,6 +52,8 @@
   width: 36px;
   height: 36px;
   flex-shrink: 0;
+  /* render the logo mark in white */
+  filter: brightness(0) invert(1);
 }
 
 .app-logo-text {

@@ -636,7 +636,7 @@
 .bridge-badge-chain svg, .bridge-badge-chain img { width: 100%; height: 100%; object-fit: contain; display: block; }
 /* enlarge only the Arbitrum logomark inside the badge socket (its clear-space
    crops harmlessly; the socket size is unchanged) */
-.bridge-badge-chain img { transform: scale(1.55); }
+.bridge-badge-chain img { transform: scale(1.7); }
 
 .bridge-card-text { display: flex; flex-direction: column; }
 .bridge-card-title { font-size: 14px; font-weight: 600; color: #fff; }
