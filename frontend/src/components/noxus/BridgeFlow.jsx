@@ -32,7 +32,7 @@ import "./BridgeFlow.css";
 
 // Two automatic background fillers (paid back to the sender) that lift the batch
 // to the k-anonymity floor of 3. Never shown as inputs.
-const FILLER_UNITS = [20_000n, 30_000n]; // 0.02 + 0.03 cUSD, returned to you
+const FILLER_UNITS = [50_000n, 50_000n]; // 0.05 + 0.05 cUSD (equal parts), returned to you
 
 const STEP_GROUPS = [
   { title: "Read epoch", short: "Epoch", keys: ["epoch"] },
