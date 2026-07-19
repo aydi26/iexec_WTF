@@ -130,8 +130,8 @@ Run it locally (`cd frontend && npm install && npm run dev`) or deploy it to Ver
 ```
 noxus/
 ├── contracts/           NoxusBatcher · NoxusDistributor · NoxusCUSDC · lib/ · interfaces/
-├── scripts/             00 wrappers · 01 batcher · 02 deploy+wire · 03 seed · 04 honest E2E
-│                        05/05b/05c fallback+refund · bench_nox_latency · audit_privacy · verify_sourcify
+├── scripts/             00 wrappers · 02 deploy+wire · 03 seed · 04 honest E2E · 05 fallback+refund
+│                        06 deploy reverse pair · 07 reverse E2E · audit_privacy · verify_sourcify · bench/probe
 ├── frontend/            Vite/React dApp — single in-browser confidential bridge widget (Bridge + Track)
 ├── docs/                SPEC.md (full spec + worklog) · PLAN.md · DEMO_SCRIPT.md · X_POST.md
 ├── deployments/         live addresses per chainId

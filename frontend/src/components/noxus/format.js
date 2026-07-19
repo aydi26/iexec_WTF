@@ -32,20 +32,9 @@ export function formatUsdc(units, maxFrac = CUSDC_DECIMALS) {
   return `${neg ? "-" : ""}${whole.toString()}${frac ? "." + frac : ""}`;
 }
 
-// bytes32 zero — default dstHandle when the user has no Arb pre-registration.
-export const ZERO_BYTES32 =
-  "0x0000000000000000000000000000000000000000000000000000000000000000";
-
-export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
 /** True if the string is a plausible 0x-prefixed hex of `bytes` length (in bytes). */
 export function isHex(v, bytes) {
   if (typeof v !== "string") return false;
   const re = new RegExp(`^0x[0-9a-fA-F]{${bytes * 2}}$`);
   return re.test(v);
-}
-
-/** True if the string is 0x-prefixed hex of any non-zero, even nibble length. */
-export function isHexBytes(v) {
-  return typeof v === "string" && /^0x([0-9a-fA-F]{2})+$/.test(v.trim());
 }

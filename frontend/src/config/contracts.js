@@ -30,7 +30,6 @@ export const CHAIN_IDS = {
   DEST: arbitrumSepolia.id, // 421614   — Arb Sepolia (distribute leg)
 };
 
-export const CHAINS = { sepolia, arbitrumSepolia };
 
 // ---------------------------------------------------------------------------
 // Address resolution (defensive)
@@ -56,14 +55,6 @@ export const ADDRESSES = {
     NoxusCUSDC: pick(arbSepoliaDeployment, "NoxusCUSDC"),
   },
 };
-
-// Convenience source-leg exports (most views run on ETH Sepolia).
-export const BATCHER_ADDRESS = ADDRESSES[CHAIN_IDS.SOURCE].NoxusBatcher;
-export const CUSDC_ADDRESS = ADDRESSES[CHAIN_IDS.SOURCE].NoxusCUSDC;
-export const DISTRIBUTOR_ADDRESS =
-  ADDRESSES[CHAIN_IDS.DEST].NoxusDistributor; // may be undefined (TODO)
-// Destination-leg cUSDC (Arb Sepolia) — where the confidential credit lands.
-export const DEST_CUSDC_ADDRESS = ADDRESSES[CHAIN_IDS.DEST].NoxusCUSDC;
 
 export const CUSDC_DECIMALS = 6; // amounts entered/displayed in USDC (6 decimals)
 
@@ -126,20 +117,6 @@ export const EXPLORERS = {
 
 export const txUrl = (chainId, hash) =>
   `${EXPLORERS[chainId] || EXPLORERS[CHAIN_IDS.SOURCE]}/tx/${hash}`;
-
-export const addressUrl = (chainId, addr) =>
-  `${EXPLORERS[chainId] || EXPLORERS[CHAIN_IDS.SOURCE]}/address/${addr}`;
-
-// Epoch state enum (matches NoxusBatcher.epochInfo() -> state uint8).
-export const EPOCH_STATE = {
-  0: "Open",
-  1: "Closed",
-  2: "Settled",
-  3: "Refunded",
-};
-
-// USDC (underlying) on the source chain (ETH Sepolia) — kept for back-compat.
-export const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
 
 // ---------------------------------------------------------------------------
 // Multi-chain / bidirectional routing
