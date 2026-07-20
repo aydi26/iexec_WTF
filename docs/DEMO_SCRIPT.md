@@ -26,7 +26,7 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 - [ ] **All contracts explorer-verified** on Etherscan (ETH Sepolia) and Arbiscan (Arb Sepolia) — judges click through, so green checkmarks must be visible.
 - [ ] **Tabs pre-opened** (see "Tabs to have staged" below) and logged in / wallet connected.
 - [ ] **A real, unrelated CCTP `depositForBurn` tx** located on Etherscan for the opening hook (any recent public burn — e.g. from a treasury/exchange), so amounts are plainly visible in it.
-- [ ] Keeper panel (frontend) open and pointed at the live epoch; CLI scripts staged as the rehearsed instant fallback if a UI button stalls on camera.
+- [ ] The bridge widget open on the live run (its Track tab shows every phase with tx links); CLI scripts staged as the rehearsed instant fallback if a UI step stalls on camera.
 
 ## Tabs to have staged (left-to-right in the browser)
 1. Etherscan — a real public CCTP burn (opening hook)
@@ -34,8 +34,8 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 3. Etherscan — `NoxusBatcher` `EpochSettled` / the CCTP burn tx
 4. Circle CCTP explorer / Iris status for the bridge message
 5. Arbiscan — `<DISTRIBUTOR>` epoch, the integrity-check `finalizeEpoch` proof tx
-6. Noxus frontend — recipient's **decrypt-my-balance** view
-7. Noxus frontend — **auditor** view (grant viewer + decrypt one amount)
+6. Noxus frontend — the widget's **Track tab / final summary** (bridged amount shown only to the user)
+7. Terminal — **auditor** demo via script (`grantAuditor` + auditor decrypts one amount)
 
 > **Live addresses (hardened set — verify against `deployments/*.json` before shooting):** ETH Sep cUSDC `0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C`, Batcher `0x814a70961395218365DA5892F5de768a9Ed84E37`; Arb Sep cUSDC `0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209`, Distributor `0x410195cF6137661B066d4264515C6dc9b860ECFA`.
 
@@ -60,10 +60,10 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 - **Tab:** Etherscan (3 deposits, side-by-side).
 
 ### 1:15 — 1:35 · Close → settle → the ONE public number
-- **On screen:** Keeper panel: press **Close**, then **Settle**. Show the encrypted-sum reveal resolving to a single plaintext `A` with the KMS proof indicator turning green; then the `EpochSettled` / CCTP burn tx on Etherscan (Tab 3) showing `A` as the only visible amount.
+- **On screen:** the widget's Track tab: the **Close** and **Settle + CCTP burn** phases complete on their own (the widget drives them). Show the settle detail resolving to a single plaintext `A`, then the `EpochSettled` / CCTP burn tx on Etherscan (Tab 3) showing `A` as the only visible amount.
 - **Presenter:** "The keeper closes the epoch and settles. The **only** number that ever becomes public is the aggregate — one figure, unavoidable, because that's the CCTP burn amount. No individual amount, ever."
 - **Editing note:** the settle reveal is a two-tx KMS round-trip. It's fast (~2–7 s) but if the wait is visible on camera, **cut on the click and resume on the green proof indicator** — do not sit on dead air.
-- **Tab:** Keeper panel → Etherscan (`EpochSettled` / burn).
+- **Tab:** Widget (Track tab) → Etherscan (`EpochSettled` / burn).
 
 ### 1:35 — 2:05 · Live CCTP bridge
 - **On screen:** Tab 4 — Circle CCTP explorer / Iris picks up the burn; status `pending_confirmations → complete`; Fast Transfer.
@@ -77,16 +77,15 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 - **Tab:** Arbiscan (`finalizeEpoch` proof tx).
 
 ### 2:35 — 3:00 · Confidential distribution + recipient decrypts own balance
-- **On screen:** Tab 6 — the Noxus frontend, logged in as one recipient. Their confidential cUSDC balance is an encrypted handle; they click **Decrypt my balance** and their own amount appears **only to them**.
-- **Presenter:** "Distribution is confidential — each recipient is credited, amounts hidden from everyone. Only the recipient, with their own key, decrypts their own balance. Everyone else sees participants but no numbers."
-- **Editing note:** client-decrypt is a KMS RTT too; pre-fetch during the prior narration if needed, or cut on the click.
-- **Tab:** Frontend (decrypt-my-balance).
+- **On screen:** Tab 6 — the widget's final summary: "Bridged confidentially", the user's own amount (visible only in their browser), and the four tx links. On Arbiscan, the distribution tx shows **no amounts**.
+- **Presenter:** "Distribution is confidential — each recipient is credited, amounts hidden from everyone. Only the recipient, in their own browser, sees their amount. Everyone else sees participants but no numbers."
+- **Tab:** Frontend (Track tab final summary).
 
 ### 3:00 — 3:25 · The auditor moment
-- **On screen:** Tab 7 — auditor view. The depositor **grants a viewer** (`addViewer`) to an auditor address; the auditor then **decrypts exactly one amount**.
+- **On screen:** Tab 7 — terminal: the depositor **grants a viewer** (`grantAuditor` via script) to an auditor address; the auditor then **decrypts exactly one amount**.
 - **Presenter:** "Private for the market, transparent for whoever has the right to know. A depositor grants an auditor a viewer key, and the auditor can decrypt that one amount — selective disclosure, on-chain and on demand."
 - **Accuracy note (IMPORTANT):** grants are **add-only** — do **not** claim the grant is revocable or show a "revoke" step. Say "grant a viewer," not "grant and revoke."
-- **Tab:** Frontend (auditor view).
+- **Tab:** Terminal (auditor script).
 
 ### 3:25 — 3:40 · Adversarial / fallback one-liner
 - **On screen:** A single explainer card or a pre-captured `check == 0` result: inflated destination claim → integrity check fails → refund-to-source.

@@ -45,8 +45,9 @@ npm run preview    # serve the production build at http://localhost:4173
 
 ## After deploy
 
-- The dApp works once a wallet is connected to **Ethereum Sepolia** (the source leg).
-- Faucet button (header) dispenses test cUSDC; deposit / epoch dashboard / decrypt / auditor /
-  keeper views are all live against the deployed, Sourcify-verified contracts.
-- The full cross-chain confidential bridge (relay → integrity check → distribute on Arbitrum)
-  is driven by the keeper scripts in [`scripts/`](../scripts) — see the root `README.md`.
+- The app is a single bridge widget: connect a wallet, enter an amount + destination, and the
+  entire confidential cross-chain flow (both directions, ETH↔Arb) runs in the browser against
+  the deployed, Sourcify-verified contracts.
+- The header **Faucet** button links to the Circle USDC faucet and both gas faucets.
+- The keeper scripts in [`scripts/`](../scripts) remain available as a CLI fallback and for the
+  adversarial/refund demo — see the root `README.md`.

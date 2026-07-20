@@ -78,6 +78,7 @@ Both critical flows run **end-to-end on real testnets with zero mock data** (rea
 |---|---|
 | **Honest epoch** | 3 hidden deposits (0.10 / 0.15 / 0.20 USDC) → bridged aggregate `A = 0.45` → **integrity check == 1** → confidential distribution → recipient decrypts their balance |
 | **Adversarial epoch** | depositor inflates their claim to `0.99` → `Σ = 1.24 ≠ A = 0.45` → **check == 0** → attribution reveal exposes the cheat → refund-to-source credits attested amounts (cheater gets 0.20, not 0.99) |
+| **Reverse direction** | same honest flow run Arb→ETH on the reverse pair (Batcher@Arb → Distributor@ETH): 3 hidden deposits → `A = 0.10` bridged → **check == 1** → confidential distribution on Ethereum |
 | **Latency** | Nox reveal round-trip ~2–7 s (GO-LIVE tier) — fast enough for a live demo; block confirmation, not the TEE, is the bottleneck |
 | **Privacy audit** | exactly 3 legal `allowPublicDecryption` sites, no amount leakage in events, no branching on encrypted values |
 
@@ -100,7 +101,9 @@ The bridge is **bidirectional** — every chain hosts both a `NoxusBatcher` and 
 
 ## The app
 
-The frontend is a **single in-browser bridge widget**. You enter an amount and a destination; the widget then drives the *entire* confidential cross-chain flow from your wallet — wrap USDC → cUSDC, pre-register, deposit (encrypted), close, settle + CCTP burn, relay, TEE integrity check, and confidential distribution — with a live step tracker. A **Track** tab scans both contracts and lists any bridges still in flight (and the phase each is stuck at). No scripts required to bridge.
+The frontend is a **single in-browser bridge widget**. You enter an amount and a destination; the widget then drives the *entire* confidential cross-chain flow from your wallet — wrap USDC → cUSDC, pre-register, deposit (encrypted), close, settle + CCTP burn, relay, TEE integrity check, and confidential distribution — with a live step tracker. The **swap arrow flips the direction** (ETH→Arb ↔ Arb→ETH); a **Track** tab scans both directions and lists any bridges still in flight (and the phase each is stuck at); a header **Faucet** button links every faucet you need. No scripts required to bridge.
+
+Practical details: max **1 USDC per bridge** (testnet cap); the k=3 batch is met with two automatic **0.5 cUSD fillers returned to you** on the destination; the USDC approval is **one-time** (max allowance to our own Sourcify-verified wrapper) and the first wrap includes filler headroom — so from the second bridge on there are **no funding transactions at all**.
 
 Run it locally (`cd frontend && npm install && npm run dev`) or deploy it to Vercel with the repo's `vercel.json` — see [`docs/DEPLOY_VERCEL.md`](docs/DEPLOY_VERCEL.md).
 

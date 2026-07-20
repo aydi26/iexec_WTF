@@ -22,14 +22,15 @@ const docsTree = [
     category: "Protocol",
     content: {
       title: "Getting Started",
-      body: "Noxus is a confidential cross-chain USDC settlement layer over Circle CCTP V2, using iExec Nox (encrypted ERC-7984 handles + TEE) as the privacy layer. The app is a single bridge widget: you enter an amount and a destination, and everything — wrapping USDC into confidential cUSDC, batching, the CCTP bridge, the TEE integrity check and the confidential distribution — runs in the background, driven entirely from your browser. Individual amounts never touch the blockchain; only the batch aggregate is ever public. Positioning: confidentiality, not anonymity — participants are visible, amounts are not.",
+      body: "Noxus is a confidential cross-chain USDC settlement layer over Circle CCTP V2, using iExec Nox (encrypted ERC-7984 handles + TEE) as the privacy layer. The app is a single bridge widget: you enter an amount and a destination, and everything — wrapping USDC into confidential cUSDC, batching, the CCTP bridge, the TEE integrity check and the confidential distribution — runs in the background, driven entirely from your browser. The bridge is bidirectional: the swap arrow flips the route between Ethereum Sepolia and Arbitrum Sepolia. Individual amounts never touch the blockchain; only the batch aggregate is ever public. Positioning: confidentiality, not anonymity — participants are visible, amounts are not.",
       subsections: [
         {
           title: "Prerequisites",
           items: [
-            "A wallet (e.g. MetaMask) connected to Ethereum Sepolia",
-            "Testnet USDC on Ethereum Sepolia (get it from faucet.circle.com) — the widget wraps it into cUSDC for you",
+            "A wallet (e.g. MetaMask) — the header Faucet button links to every faucet you need",
+            "Testnet USDC on the source chain (Circle faucet) — the widget wraps it into cUSDC for you",
             "A little ETH for gas on BOTH Ethereum Sepolia and Arbitrum Sepolia",
+            "Per-bridge cap on testnet: max 1 USDC per transfer",
             "During the bridge your wallet switches networks a few times — approve each prompt",
           ],
         },
@@ -37,9 +38,17 @@ const docsTree = [
           title: "The k=3 batch (why a little extra)",
           items: [
             "Privacy needs a crowd: a batch must have at least 3 depositors to hide any single amount",
-            "So your transfer is bundled with 2 tiny automatic filler transfers back to yourself",
-            "The fillers cost a little extra USDC up front and are returned to you as cUSD on Arbitrum",
+            "So your transfer is bundled with 2 automatic filler transfers of 0.5 cUSD each (1 USDC total) back to yourself",
+            "The fillers are working liquidity, not a fee: they cross with the batch and land back in your wallet on the destination chain",
             "You only enter your amount + destination — the fillers are handled in the background",
+          ],
+        },
+        {
+          title: "Fewer signatures over time",
+          items: [
+            "The USDC approval is one-time (max allowance to the project's own Sourcify-verified wrapper)",
+            "The first wrap includes headroom for the next bridge's fillers, so later bridges skip the funding step entirely",
+            "From your second bridge on, you only sign the pre-registrations, the encrypted deposits and the protocol steps",
           ],
         },
       ],
@@ -55,12 +64,12 @@ const docsTree = [
         label: "1. Confidential Deposit",
         content: {
           title: "1. Confidential Deposit",
-          body: "On Ethereum Sepolia, you wrap USDC into confidential cUSDC (ERC-7984), then deposit an amount that is encrypted client-side before it ever touches the chain. On-chain, observers see that you deposited — but never how much.",
+          body: "On the source chain, the widget wraps your USDC into confidential cUSDC (ERC-7984), then deposits an amount that is encrypted client-side before it ever touches the chain. On-chain, observers see that you deposited — but never how much.",
           subsections: [
             {
               title: "What happens",
               items: [
-                "approve USDC, then wrap it into cUSDC (confidential ERC-7984 token)",
+                "one-time max USDC approval to the wrapper, then wrap into cUSDC (with headroom so later bridges skip this)",
                 "setOperator authorizes the Batcher to pull your encrypted balance",
                 "Your amount is encrypted in the browser via the Nox handle SDK",
                 "deposit() adds your encrypted amount to the epoch's encrypted sum",
@@ -95,12 +104,12 @@ const docsTree = [
         label: "3. Bridge & Integrity Check",
         content: {
           title: "3. Bridge & Integrity Check",
-          body: "CCTP V2 Fast Transfer mints A on Arbitrum Sepolia (~8-20s). Before any money moves, an on-chain, TEE-verified integrity check confirms that the sum of the (still-encrypted) destination claims equals the bridged aggregate A. This is what makes cheating detectable.",
+          body: "CCTP V2 Fast Transfer mints A on the destination chain (~8-20s). Before any money moves, an on-chain, TEE-verified integrity check confirms that the sum of the (still-encrypted) destination claims equals the bridged aggregate A. This is what makes cheating detectable.",
           subsections: [
             {
               title: "The check",
               items: [
-                "Each depositor pre-registers their confidential destination claim on Arbitrum (own tx)",
+                "Each depositor pre-registers their confidential destination claim on the destination chain (own tx)",
                 "relayReceive mints A and binds it to the source-committed claim set",
                 "checkEpoch computes, in the TEE, whether Sum(claims) == A and reveals only a boolean",
                 "The comparison is overflow-safe: a cheater cannot make claims wrap around to A",
@@ -136,10 +145,10 @@ const docsTree = [
     category: "Technical",
     content: {
       title: "Architecture",
-      body: "Noxus spans two chains and calls two unmodified official protocols. The source leg batches confidential deposits on Ethereum Sepolia; the destination leg verifies and distributes on Arbitrum Sepolia. Circle CCTP V2 does the actual bridging; iExec Nox provides the encrypted handles, the TEE compute, and the on-chain ACL. Neither protocol is modified — Noxus only calls them.",
+      body: "Noxus spans two chains, calls two unmodified official protocols, and runs in BOTH directions: every chain hosts a NoxusBatcher (source role) and a NoxusDistributor (destination role), so the widget's swap arrow flips the route ETH<->Arb. The source-side Batcher collects confidential deposits; the destination-side Distributor verifies and distributes. Circle CCTP V2 does the actual bridging; iExec Nox provides the encrypted handles, the TEE compute, and the on-chain ACL. Neither protocol is modified — Noxus only calls them.",
       table: [
-        { label: "Source leg", value: "NoxusBatcher.sol on Ethereum Sepolia" },
-        { label: "Destination leg", value: "NoxusDistributor.sol on Arbitrum Sepolia" },
+        { label: "Source leg", value: "NoxusBatcher.sol (one per chain)" },
+        { label: "Destination leg", value: "NoxusDistributor.sol (one per chain)" },
         { label: "Confidential token", value: "NoxusCUSDC (iExec ERC20ToERC7984Wrapper) on both chains" },
         { label: "Bridge", value: "Circle CCTP V2 Fast Transfer + Hooks (unmodified)" },
         { label: "Privacy layer", value: "iExec Nox: ERC-7984 handles, TEE compute, threshold-KMS reveals" },
@@ -195,14 +204,17 @@ const docsTree = [
     label: "Deployments",
     category: "Reference",
     content: {
-      title: "Live Deployments (Sourcify-verified)",
+      title: "Live Deployments (Sourcify-verified, bidirectional)",
+      body: "Every chain hosts both roles, so the bridge runs ETH->Arb and Arb->ETH. All six contracts are Sourcify exact_match.",
       table: [
         { label: "Ethereum Sepolia", value: "Chain ID 11155111 · CCTP domain 0" },
-        { label: "NoxusBatcher (ETH)", value: "0x814a70961395218365DA5892F5de768a9Ed84E37" },
         { label: "NoxusCUSDC (ETH)", value: "0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C" },
+        { label: "NoxusBatcher (ETH, source of ETH->Arb)", value: "0x814a70961395218365DA5892F5de768a9Ed84E37" },
+        { label: "NoxusDistributor (ETH, dest of Arb->ETH)", value: "0x073A213Be93EC6B5aD830e466DA95603450bbfb0" },
         { label: "Arbitrum Sepolia", value: "Chain ID 421614 · CCTP domain 3" },
-        { label: "NoxusDistributor (Arb)", value: "0x410195cF6137661B066d4264515C6dc9b860ECFA" },
         { label: "NoxusCUSDC (Arb)", value: "0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209" },
+        { label: "NoxusBatcher (Arb, source of Arb->ETH)", value: "0x47Cd125B48970D899bD9C7434187a8C5c5214d30" },
+        { label: "NoxusDistributor (Arb, dest of ETH->Arb)", value: "0x410195cF6137661B066d4264515C6dc9b860ECFA" },
         { label: "CCTP TokenMessengerV2", value: "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA (both chains)" },
         { label: "CCTP MessageTransmitterV2", value: "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275 (both chains)" },
       ],
@@ -246,10 +258,12 @@ const docsTree = [
         {
           title: "Good to know",
           items: [
-            "USDC uses 6 decimals — 1 USDC = 1,000,000 raw units",
+            "USDC uses 6 decimals — 1 USDC = 1,000,000 raw units; testnet cap: max 1 USDC per bridge",
             "closeEpoch requires at least minDepositors (default 3) to preserve k-anonymity",
-            "The ENTIRE bridge runs in your browser from the single widget — deposits, batching, CCTP bridge, TEE check and distribution; your wallet switches between Ethereum and Arbitrum Sepolia along the way",
-            "The Track tab lists every bridge that was started but is not complete yet, and the exact phase it is stuck at — refresh it any time",
+            "The bridge is bidirectional — use the swap arrow to flip ETH -> Arb into Arb -> ETH",
+            "The ENTIRE bridge runs in your browser from the single widget — deposits, batching, CCTP bridge, TEE check and distribution; your wallet switches networks along the way",
+            "The Track tab lists every bridge (both directions) that was started but is not complete yet, and the exact phase it is stuck at — refresh it any time",
+            "The header Faucet button links to the Circle USDC faucet and both gas faucets",
             "CCTP Fast Transfer settles in ~8-20 seconds; the reveal round-trip via the Nox KMS is a few seconds",
             "Everything runs on real testnets with real USDC, real Iris attestations, and real Nox proofs — no mock data",
           ],
