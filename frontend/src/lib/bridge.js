@@ -34,6 +34,12 @@ const IRIS = "https://iris-api-sandbox.circle.com";
 const ZERO_BYTES32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
 
+// One-time max allowance for the cUSDC wrapper (see the fund step below).
+const MAX_UINT256 = 2n ** 256n - 1n;
+// Extra USDC wrapped beyond this bridge's shortfall so the NEXT bridge's
+// fillers are already covered and the wrap tx disappears from later bridges.
+const WRAP_HEADROOM = 1_000_000n; // ~one extra bridge of filler liquidity (2 x 0.5 cUSD)
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------------------------------------------------------------------------
@@ -256,8 +262,10 @@ export async function runConfidentialBridge({
     me = wallet.account?.address ?? wallet.account;
 
     // Read the confidential balance handle and decrypt it (best-effort — if the
-    // decrypt fails we conservatively assume 0 and wrap the full amount).
+    // decrypt fails we conservatively assume 0 and wrap generously, capped by
+    // the plain USDC balance so wrap can never revert).
     let confBal = 0n;
+    let confBalKnown = true; // false only when the read/decrypt itself failed
     try {
       const balHandle = await publicClientSource.readContract({
         address: CUSDC_ADDRESS,
@@ -271,45 +279,79 @@ export async function runConfidentialBridge({
         confBal = BigInt(dec.value);
       }
     } catch {
-      confBal = 0n; // cannot read/decrypt -> assume underfunded, wrap the total
+      confBal = 0n; // cannot read/decrypt -> assume underfunded
+      confBalKnown = false;
     }
 
+    let wrapped = false;
     if (confBal < total) {
-      const wrapAmt = total + total / 5n + 1n; // total + ~20% margin
-      step("fund", "active", `funding: wrapping ${wrapAmt.toString()} base units of USDC → cUSDC`);
+      const shortfall = total - confBal;
 
-      // approve underlying USDC for the wrapper (only if needed)
-      const allowance = await publicClientSource.readContract({
+      // Wrap enough for THIS bridge plus headroom for the next one, capped by
+      // the plain USDC we actually hold — so wrap can never revert, and later
+      // bridges skip the wrap tx entirely.
+      const usdcBal = await publicClientSource.readContract({
         address: USDC_ADDRESS,
         abi: ERC20_ABI,
-        functionName: "allowance",
-        args: [me, CUSDC_ADDRESS],
+        functionName: "balanceOf",
+        args: [me],
       });
-      if (allowance < wrapAmt) {
-        step("fund", "active", "confirm USDC approve in wallet");
-        const ah = await wallet.writeContract({
+      if (confBalKnown && usdcBal < shortfall) {
+        throw new Error(
+          `Not enough USDC on ${route?.srcLabel || "the source chain"}: ` +
+            `need ${fmtUsdc(shortfall)} USDC, have ${fmtUsdc(usdcBal)} USDC.`
+        );
+      }
+      const target = shortfall + WRAP_HEADROOM;
+      const wrapAmt = usdcBal < target ? usdcBal : target;
+
+      if (wrapAmt > 0n) {
+        step(
+          "fund",
+          "active",
+          `funding: wrapping ${fmtUsdc(wrapAmt)} USDC → cUSDC (covers this bridge + headroom for the next)`
+        );
+
+        // Approve underlying USDC for the wrapper (only if needed).
+        // SECURITY RATIONALE for the max allowance: the spender is our own
+        // Sourcify-verified NoxusCUSDC wrapper (route.cusdc), which can only
+        // pull USDC when the user explicitly calls wrap() — this is the
+        // standard max-allowance pattern for a first-party wrapper, not a
+        // third-party spender. Approving once means later bridges never
+        // re-prompt for approval.
+        const allowance = await publicClientSource.readContract({
           address: USDC_ADDRESS,
           abi: ERC20_ABI,
-          functionName: "approve",
-          args: [CUSDC_ADDRESS, wrapAmt],
+          functionName: "allowance",
+          args: [me, CUSDC_ADDRESS],
+        });
+        if (allowance < wrapAmt) {
+          step("fund", "active", "confirm one-time USDC approval (max) in wallet — future bridges skip this");
+          const ah = await wallet.writeContract({
+            address: USDC_ADDRESS,
+            abi: ERC20_ABI,
+            functionName: "approve",
+            args: [CUSDC_ADDRESS, MAX_UINT256],
+            account: wallet.account,
+            chain: wallet.chain,
+          });
+          step("fund", "active", "confirming one-time approval", ah, SRC);
+          await waitSrc(ah);
+        }
+
+        step("fund", "active", "confirm wrap in wallet");
+        const wh = await wallet.writeContract({
+          address: CUSDC_ADDRESS,
+          abi: CUSDC_ABI,
+          functionName: "wrap",
+          args: [me, wrapAmt],
           account: wallet.account,
           chain: wallet.chain,
         });
-        step("fund", "active", "confirming approve", ah, SRC);
-        await waitSrc(ah);
+        step("fund", "active", "confirming wrap", wh, SRC);
+        await waitSrc(wh);
+        wrapped = true;
       }
-
-      step("fund", "active", "confirm wrap in wallet");
-      const wh = await wallet.writeContract({
-        address: CUSDC_ADDRESS,
-        abi: CUSDC_ABI,
-        functionName: "wrap",
-        args: [me, wrapAmt],
-        account: wallet.account,
-        chain: wallet.chain,
-      });
-      step("fund", "active", "confirming wrap", wh, SRC);
-      await waitSrc(wh);
     }
 
     // operator authorization for the batcher (only if not already)
@@ -332,7 +374,13 @@ export async function runConfidentialBridge({
       step("fund", "active", "confirming setOperator", oh, SRC);
       await waitSrc(oh);
     }
-    step("fund", "done", "funded + batcher authorized");
+    step(
+      "fund",
+      "done",
+      wrapped
+        ? "funded (incl. headroom for the next bridge) + batcher authorized"
+        : "already funded — no approval needed"
+    );
   } catch (e) {
     step("fund", "error", errMsg(e));
     throw e;
@@ -583,4 +631,9 @@ function short(a) {
 }
 function errMsg(e) {
   return (e?.shortMessage || e?.message || String(e) || "step failed").slice(0, 240);
+}
+/** Format USDC base units (6 decimals) as a human-readable decimal string. */
+function fmtUsdc(v) {
+  const s = v.toString().padStart(7, "0");
+  return `${s.slice(0, -6)}.${s.slice(-6)}`.replace(/0+$/, "").replace(/\.$/, "");
 }

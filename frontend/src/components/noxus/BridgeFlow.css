@@ -40,7 +40,7 @@
 .bf-rail-node:not(:first-child)::before {
   content: "";
   position: absolute;
-  top: 13px;
+  top: 10px;
   left: -50%;
   width: 100%;
   height: 2px;
@@ -52,13 +52,13 @@
   background: rgba(245, 214, 75, 0.45);
 }
 .bf-rail-dot {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   flex-shrink: 0;
   z-index: 1;
@@ -72,19 +72,18 @@
 }
 .bf-rail-node.done .bf-rail-dot { background: var(--nx-accent); color: #000; }
 .bf-rail-node.error .bf-rail-dot { background: rgba(255, 68, 68, 0.14); color: #ff6b6b; }
+/* only the active / errored node renders its label (others are dot + tooltip) */
 .bf-rail-label {
   font-size: 9.5px;
   line-height: 1.2;
   text-align: center;
-  color: #636366;
   max-width: 60px;
 }
 .bf-rail-node.active .bf-rail-label { color: #e5e5e7; }
-.bf-rail-node.done .bf-rail-label { color: #8a8a8e; }
 .bf-rail-node.error .bf-rail-label { color: #ff8a8a; }
 
 .bf-rail-spinner {
-  width: 12px; height: 12px;
+  width: 10px; height: 10px;
   border: 2px solid transparent;
   border-top-color: currentColor;
   border-radius: 50%;
@@ -92,12 +91,36 @@
 }
 @keyframes bfSpin { to { transform: rotate(360deg); } }
 
-/* detailed vertical step list (revealed once running) */
+/* "Step 2 of 9 · Pre-register (destination)" caption above the phase list */
+.bf-progress-caption {
+  margin: 10px 0 2px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a8a8e;
+}
+
+/* detailed vertical step list (revealed once running) — done phases collapse
+   to one muted line; pending phases are omitted (the rail conveys them) */
 .bf-steps {
-  margin-top: 12px;
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+.bf-phase-mini {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  color: #8a8a8e;
+}
+.bf-phase-mini .glyph {
+  color: var(--nx-accent);
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 .bf-phase {
   border-radius: 10px;
@@ -125,7 +148,6 @@
   color: #636366;
 }
 .bf-phase.active .bf-phase-icon { background: rgba(245, 214, 75, 0.14); color: var(--nx-accent); }
-.bf-phase.done .bf-phase-icon { background: var(--nx-accent); color: #000; }
 .bf-phase.error .bf-phase-icon { background: rgba(255, 68, 68, 0.14); color: #ff6b6b; }
 .bf-phase-title {
   font-size: 13.5px;
@@ -133,7 +155,6 @@
   color: #636366;
 }
 .bf-phase.active .bf-phase-title { color: #fff; }
-.bf-phase.done .bf-phase-title { color: #8a8a8e; }
 .bf-phase.error .bf-phase-title { color: #ff8a8a; }
 
 .bf-substep {

@@ -25,7 +25,7 @@ import {
 } from "../../config/contracts";
 import { parseUsdc, formatUsdc, isHex } from "./format";
 import { runConfidentialBridge } from "../../lib/bridge";
-import { LockIcon, shorten } from "./shared";
+import { shorten } from "./shared";
 import usdcSvg from "../../assets/usdc.svg";
 import arbitrumSvg from "../../assets svg/1225_Arbitrum_Logomark_FullColor_ClearSpace.svg";
 import "./BridgeFlow.css";
@@ -114,10 +114,13 @@ function RailNode({ status, label }) {
   const glyph =
     status === "done" ? "✓" : status === "error" ? "!" :
     status === "active" ? <span className="bf-rail-spinner" /> : "";
+  // Label only under the node the user cares about (active or errored); the
+  // others stay as bare dots with a tooltip — kills the 9-label clutter.
+  const showLabel = status === "active" || status === "error";
   return (
-    <div className={`bf-rail-node ${status}`}>
+    <div className={`bf-rail-node ${status}`} title={label}>
       <span className="bf-rail-dot">{glyph}</span>
-      <span className="bf-rail-label">{label}</span>
+      {showLabel && <span className="bf-rail-label">{label}</span>}
     </div>
   );
 }
@@ -309,6 +312,9 @@ export default function BridgeFlow() {
   }, [view, result, scanBridges]);
 
   const started = Object.keys(steps).length > 0;
+  // First group that is not fully done = the step in flight (for the caption).
+  const firstOpenIdx = STEP_GROUPS.findIndex((g) => groupStatus(g.keys) !== "done");
+  const currentGroupIdx = firstOpenIdx === -1 ? STEP_GROUPS.length - 1 : firstOpenIdx;
   const txOf = (k) => steps[k]?.txHash;
   const usd = (Number(amount) || 0).toFixed(2);
   const sentRoute = sent?.route || route;
@@ -464,10 +470,10 @@ export default function BridgeFlow() {
                 {sent ? formatUsdc(sent.amount) : "—"} cUSD delivered to{" "}
                 {sent ? shorten(sent.dest, 6, 4) : "—"} on {sentRoute.dstLabel}.
               </div>
-              {result.revealedBalance != null && (
+              {sent && (
                 <div className="bf-result-reveal">
-                  {formatUsdc(result.revealedBalance)} cUSD
-                  <small>your {sentRoute.dstLabel} balance, decrypted locally in your browser</small>
+                  {formatUsdc(sent.amount)} cUSD
+                  <small>delivered confidentially</small>
                 </div>
               )}
               <div className="bf-result-details">
@@ -500,10 +506,6 @@ export default function BridgeFlow() {
                   </div>
                 ) : null;
               })()}
-              <div className="mf-enc-note" style={{ marginTop: 14 }}>
-                <LockIcon size={16} />
-                <span>Individual amounts never appeared on-chain — only the batch aggregate <strong>A</strong> was public. The 2 fillers were returned to you.</span>
-              </div>
               <div className="bf-result-actions"><button className="bridge-btn primary" onClick={reset}>Bridge again</button></div>
             </div>
           ) : started ? (
@@ -512,10 +514,25 @@ export default function BridgeFlow() {
               <div className="bf-rail">
                 {STEP_GROUPS.map((g) => <RailNode key={g.title} status={groupStatus(g.keys)} label={g.short} />)}
               </div>
+              <div className="bf-progress-caption">
+                Step {currentGroupIdx + 1} of {STEP_GROUPS.length} · {STEP_GROUPS[currentGroupIdx].title}
+              </div>
               <div className="bf-steps">
                 {STEP_GROUPS.map((g) => {
                   const gStatus = groupStatus(g.keys);
-                  const gGlyph = gStatus === "done" ? "✓" : gStatus === "error" ? "!" : gStatus === "active" ? <span className="bf-rail-spinner" /> : "·";
+                  // Pending phases stay off-screen (the rail already conveys them);
+                  // done phases collapse to one muted line; only the phase in
+                  // flight (or in error) shows its substeps.
+                  if (gStatus === "pending") return null;
+                  if (gStatus === "done") {
+                    return (
+                      <div key={g.title} className="bf-phase-mini">
+                        <span className="glyph">✓</span>
+                        <span className="txt">{g.title}</span>
+                      </div>
+                    );
+                  }
+                  const gGlyph = gStatus === "error" ? "!" : <span className="bf-rail-spinner" />;
                   return (
                     <div key={g.title} className={`bf-phase ${gStatus}`}>
                       <div className="bf-phase-head"><span className="bf-phase-icon">{gGlyph}</span><span className="bf-phase-title">{g.title}</span></div>
@@ -528,7 +545,9 @@ export default function BridgeFlow() {
                               <span className="glyph">{s.status === "done" ? "✓" : s.status === "error" ? "✕" : "•"}</span>
                               <span className="txt">{meta.label || k}</span>
                             </div>
-                            {s.detail && <div className="bf-substep-detail">{s.detail}</div>}
+                            {s.detail && (s.status === "active" || s.status === "error") && (
+                              <div className="bf-substep-detail">{s.detail}</div>
+                            )}
                             {s.txHash && s.chainId && (
                               <div className="bf-substep-tx">
                                 <a href={txUrl(s.chainId, s.txHash)} target="_blank" rel="noreferrer">{shorten(s.txHash, 10, 8)} ↗</a>
@@ -541,11 +560,9 @@ export default function BridgeFlow() {
                   );
                 })}
               </div>
-              {error && <div className="mf-error" style={{ marginTop: 12 }}>{error}</div>}
               {running && (
                 <div className="mf-note" style={{ marginTop: 10 }}>
-                  The KMS reveals (settle + integrity check) take a few seconds each, and the
-                  CCTP relay waits for Circle's attestation (often 1–3 min on sandbox). Keep this tab open.
+                  KMS reveals take a few seconds; the CCTP relay can take 1–3 min — keep this tab open.
                 </div>
               )}
             </>
