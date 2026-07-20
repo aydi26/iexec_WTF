@@ -37,7 +37,7 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 6. Noxus frontend — the widget's **Track tab / final summary** (bridged amount shown only to the user)
 7. Terminal — **auditor** demo via script (`grantAuditor` + auditor decrypts one amount)
 
-> **Live addresses (hardened set — verify against `deployments/*.json` before shooting):** ETH Sep cUSDC `0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C`, Batcher `0x814a70961395218365DA5892F5de768a9Ed84E37`; Arb Sep cUSDC `0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209`, Distributor `0x410195cF6137661B066d4264515C6dc9b860ECFA`.
+> **Live addresses (current — verify against `deployments/*.json` before shooting):** cUSDC ETH `0x47d150…41C` / Arb `0xD74A1F…0209`; ETH→Arb Batcher `0x82688B…934A` + Distributor `0x1a87F7…E666`; Arb→ETH Batcher `0x0c0695…f000` + Distributor `0x3B9d67…80eC`.
 
 ---
 

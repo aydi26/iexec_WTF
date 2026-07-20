@@ -54,10 +54,16 @@ summed over — injecting, reordering, or withdrawing claims — which could bri
 **Now:**
 - The exact claim list is **source-committed and shipped explicitly in `hookData`**, so
   the destination checks the same set the source batched — the two legs are bound.
-- Each destination claim is **pre-registered under a key of `(recipient, dstHandle)` with
-  `msg.sender == recipient`**, so a depositor can only register their own claim and cannot
-  overwrite or forge another's. Injected, reordered, or withdrawn claims can no longer
-  brick an epoch.
+- Each destination claim is **pre-registered under a key of `(recipient, dstHandle)`**, and
+  anti-squatting is enforced by the **Nox input proof's owner-binding** (`fromExternal` only
+  passes for the handle's creator, bound to this contract as `app`), not by a caller-identity
+  check. `preRegister` is therefore open to any caller — which is what enables **direct
+  confidential sends to a third-party `recipient`**: the sender registers the recipient's
+  claim, but it only resolves if the sender's own source-authenticated committed deposit
+  references that exact `(recipient, dstHandle)`, and the recipient alone gets ACL to reveal
+  or spend it. Injected, reordered, or withdrawn claims still cannot brick an epoch.
+  (`requestClaimReveal` keeps its `msg.sender == recipient` guard: only a recipient may reveal
+  their **own** amount in fallback.)
 
 ### F-5 — Immutable peer wiring — **High**
 

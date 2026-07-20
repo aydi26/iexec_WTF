@@ -22,7 +22,7 @@ const docsTree = [
     category: "Protocol",
     content: {
       title: "Getting Started",
-      body: "Noxus is a confidential cross-chain USDC settlement layer over Circle CCTP V2, using iExec Nox (encrypted ERC-7984 handles + TEE) as the privacy layer. The app is a single bridge widget: you enter an amount and a destination, and everything — wrapping USDC into confidential cUSDC, batching, the CCTP bridge, the TEE integrity check and the confidential distribution — runs in the background, driven entirely from your browser. The bridge is bidirectional: the swap arrow flips the route between Ethereum Sepolia and Arbitrum Sepolia. Individual amounts never touch the blockchain; only the batch aggregate is ever public. Positioning: confidentiality, not anonymity — participants are visible, amounts are not.",
+      body: "Noxus is a confidential cross-chain USDC settlement layer over Circle CCTP V2, using iExec Nox (encrypted ERC-7984 handles + TEE) as the privacy layer. The app is a single bridge widget: you enter an amount and a destination — your own address or ANY other address — and everything (wrapping USDC into confidential cUSDC, batching, the CCTP bridge, the TEE integrity check and the confidential distribution) runs in the background, driven entirely from your browser. The bridge is bidirectional: the swap arrow flips the route between Ethereum Sepolia and Arbitrum Sepolia. Individual amounts never touch the blockchain; only the batch aggregate is ever public. Positioning: confidentiality, not anonymity — participants are visible, amounts are not.",
       subsections: [
         {
           title: "Prerequisites",
@@ -109,7 +109,8 @@ const docsTree = [
             {
               title: "The check",
               items: [
-                "Each depositor pre-registers their confidential destination claim on the destination chain (own tx)",
+                "The sender pre-registers each recipient's confidential destination claim on the destination chain — for itself or for a third-party address",
+                "Anti-squatting comes from the Nox input proof (owner-bound), not caller identity; the recipient alone can reveal or spend its claim",
                 "relayReceive mints A and binds it to the source-committed claim set",
                 "checkEpoch computes, in the TEE, whether Sum(claims) == A and reveals only a boolean",
                 "The comparison is overflow-safe: a cheater cannot make claims wrap around to A",
@@ -209,12 +210,12 @@ const docsTree = [
       table: [
         { label: "Ethereum Sepolia", value: "Chain ID 11155111 · CCTP domain 0" },
         { label: "NoxusCUSDC (ETH)", value: "0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C" },
-        { label: "NoxusBatcher (ETH, source of ETH->Arb)", value: "0x814a70961395218365DA5892F5de768a9Ed84E37" },
-        { label: "NoxusDistributor (ETH, dest of Arb->ETH)", value: "0x073A213Be93EC6B5aD830e466DA95603450bbfb0" },
+        { label: "NoxusBatcher (ETH, source of ETH->Arb)", value: "0x82688B8890Aab5744135cB26C3292eb821A4934A" },
+        { label: "NoxusDistributor (ETH, dest of Arb->ETH)", value: "0x3B9d67AD5B02a50d8B0db0890FCF2060BdcC80eC" },
         { label: "Arbitrum Sepolia", value: "Chain ID 421614 · CCTP domain 3" },
         { label: "NoxusCUSDC (Arb)", value: "0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209" },
-        { label: "NoxusBatcher (Arb, source of Arb->ETH)", value: "0x47Cd125B48970D899bD9C7434187a8C5c5214d30" },
-        { label: "NoxusDistributor (Arb, dest of ETH->Arb)", value: "0x410195cF6137661B066d4264515C6dc9b860ECFA" },
+        { label: "NoxusBatcher (Arb, source of Arb->ETH)", value: "0x0c0695023920e4e8F89976773998fC77E7b2f000" },
+        { label: "NoxusDistributor (Arb, dest of ETH->Arb)", value: "0x1a87F73D57BeF323376860a7B3f11f7C18AcE666" },
         { label: "CCTP TokenMessengerV2", value: "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA (both chains)" },
         { label: "CCTP MessageTransmitterV2", value: "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275 (both chains)" },
       ],

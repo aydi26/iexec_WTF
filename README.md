@@ -79,6 +79,7 @@ Both critical flows run **end-to-end on real testnets with zero mock data** (rea
 | **Honest epoch** | 3 hidden deposits (0.10 / 0.15 / 0.20 USDC) → bridged aggregate `A = 0.45` → **integrity check == 1** → confidential distribution → recipient decrypts their balance |
 | **Adversarial epoch** | depositor inflates their claim to `0.99` → `Σ = 1.24 ≠ A = 0.45` → **check == 0** → attribution reveal exposes the cheat → refund-to-source credits attested amounts (cheater gets 0.20, not 0.99) |
 | **Reverse direction** | same honest flow run Arb→ETH on the reverse pair (Batcher@Arb → Distributor@ETH): 3 hidden deposits → `A = 0.10` bridged → **check == 1** → confidential distribution on Ethereum |
+| **Third-party send** | sender bridges to a **fresh address it does not control**; the recipient (never funded, signs nothing) decrypts exactly the amount with its **own** key — direct sends to any address, amount still confidential |
 | **Latency** | Nox reveal round-trip ~2–7 s (GO-LIVE tier) — fast enough for a live demo; block confirmation, not the TEE, is the bottleneck |
 | **Privacy audit** | exactly 3 legal `allowPublicDecryption` sites, no amount leakage in events, no branching on encrypted values |
 
@@ -92,16 +93,18 @@ The bridge is **bidirectional** — every chain hosts both a `NoxusBatcher` and 
 |---|---|---|---|
 | `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0x47d150…e41C`](https://sepolia.etherscan.io/address/0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C) | confidential USDC |
 | `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0xD74A1F…0209`](https://sepolia.arbiscan.io/address/0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209) | confidential USDC |
-| `NoxusBatcher` | ETH Sepolia | [`0x814a70…4E37`](https://sepolia.etherscan.io/address/0x814a70961395218365DA5892F5de768a9Ed84E37) | source · ETH→Arb |
-| `NoxusDistributor` | Arb Sepolia | [`0x410195…0ECFA`](https://sepolia.arbiscan.io/address/0x410195cF6137661B066d4264515C6dc9b860ECFA) | dest · ETH→Arb |
-| `NoxusBatcher` | Arb Sepolia | [`0x47Cd12…4d30`](https://sepolia.arbiscan.io/address/0x47Cd125B48970D899bD9C7434187a8C5c5214d30) | source · Arb→ETH |
-| `NoxusDistributor` | ETH Sepolia | [`0x073A21…bfb0`](https://sepolia.etherscan.io/address/0x073A213Be93EC6B5aD830e466DA95603450bbfb0) | dest · Arb→ETH |
+| `NoxusBatcher` | ETH Sepolia | [`0x82688B…934A`](https://sepolia.etherscan.io/address/0x82688B8890Aab5744135cB26C3292eb821A4934A) | source · ETH→Arb |
+| `NoxusDistributor` | Arb Sepolia | [`0x410195…0ECFA`](https://sepolia.arbiscan.io/address/0x1a87F73D57BeF323376860a7B3f11f7C18AcE666) | dest · ETH→Arb |
+| `NoxusBatcher` | Arb Sepolia | [`0x0c0695…f000`](https://sepolia.arbiscan.io/address/0x0c0695023920e4e8F89976773998fC77E7b2f000) | source · Arb→ETH |
+| `NoxusDistributor` | ETH Sepolia | [`0x3B9d67…80eC`](https://sepolia.etherscan.io/address/0x3B9d67AD5B02a50d8B0db0890FCF2060BdcC80eC) | dest · Arb→ETH |
 
 > Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3. The contracts are direction-agnostic (CCTP domain + remote peer are constructor params), so a new chain is a deploy + wire once iExec Nox extends beyond these two testnets.
 
 ## The app
 
 The frontend is a **single in-browser bridge widget**. You enter an amount and a destination; the widget then drives the *entire* confidential cross-chain flow from your wallet — wrap USDC → cUSDC, pre-register, deposit (encrypted), close, settle + CCTP burn, relay, TEE integrity check, and confidential distribution — with a live step tracker. The **swap arrow flips the direction** (ETH→Arb ↔ Arb→ETH); a **Track** tab scans both directions and lists any bridges still in flight (and the phase each is stuck at); a header **Faucet** button links every faucet you need. No scripts required to bridge.
+
+You can bridge to **any destination address** (not just your own): the sender registers the recipient's confidential claim, and the recipient decrypts their credit with their own key — the amount stays hidden. Anti-squatting still holds: a claim only resolves against the sender's source-authenticated committed deposit, and the recipient alone can reveal or spend it.
 
 Practical details: max **1 USDC per bridge** (testnet cap); the k=3 batch is met with two automatic **0.5 cUSD fillers returned to you** on the destination; the USDC approval is **one-time** (max allowance to our own Sourcify-verified wrapper) and the first wrap includes filler headroom — so from the second bridge on there are **no funding transactions at all**.
 

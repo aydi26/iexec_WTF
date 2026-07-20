@@ -116,15 +116,17 @@ contract NoxusDistributor {
         emit PeerWired(_remoteBatcher);
     }
 
-    /// @notice Depositor pre-registers their confidential destination claim, keyed
-    /// by keccak256(recipient, dstHandle). MUST be the recipient's own tx: Nox binds
-    /// the input to msg.sender (owner) and this contract (app), and we additionally
-    /// require msg.sender == recipient (F-7). dstHandle/proof are created with
-    /// app=this, owner=msg.sender on THIS chain.
+    /// @notice Pre-register a confidential destination claim, keyed by
+    /// keccak256(recipient, dstHandle). Open to ANY caller, so a sender can register
+    /// a claim for a third-party `recipient` (direct sends to another address).
+    /// Anti-squatting does NOT rely on caller identity: Nox binds the input proof to
+    /// its CREATOR (owner == msg.sender) and to this contract (app), so a caller can
+    /// only register (recipient, handle) pairs built from THEIR OWN handles — which
+    /// stay inert until a source-authenticated committed deposit references that exact
+    /// (recipient, dstHandle). The recipient gets ACL on the ingested claim.
     function preRegister(uint256 epochId, address recipient, externalEuint256 dstHandle, bytes calldata proof)
         external
     {
-        if (msg.sender != recipient) revert NotRecipient();
         Epoch storage e = epochs[epochId];
         if (e.state != State.None && e.state != State.PreRegistering) revert BadState();
         bytes32 key = keccak256(abi.encode(recipient, externalEuint256.unwrap(dstHandle)));
