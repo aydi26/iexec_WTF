@@ -3,6 +3,7 @@ import { WagmiProvider } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { config } from "./config/wagmi";
 import ConnectButton from "./components/ConnectButton";
+import FaucetButton from "./components/FaucetButton";
 import StaggeredMenu from "./components/StaggeredMenu";
 import Noxus from "./components/Noxus";
 import ResourcesPage from "./components/ResourcesPage";
@@ -44,6 +45,7 @@ function AppContent() {
           </NavLink>
 
           <div className="app-header-right">
+            <FaucetButton />
             <ConnectButton />
             <StaggeredMenu />
           </div>

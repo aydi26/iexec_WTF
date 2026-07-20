@@ -1,0 +1,74 @@
+/* Header faucet button + dropdown (matches the header / widget aesthetic). */
+.faucet-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.faucet-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c7c7cc;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.faucet-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.faucet-btn.active {
+  background: rgba(245, 214, 75, 0.1);
+  border-color: rgba(245, 214, 75, 0.25);
+  color: #F5D64B;
+}
+
+.faucet-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 270px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(18, 18, 20, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  z-index: 60;
+}
+
+.faucet-menu-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #8a8a8e;
+  padding: 4px 8px 8px;
+}
+
+.faucet-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: background 0.12s ease;
+}
+.faucet-item:hover { background: rgba(245, 214, 75, 0.07); }
+.faucet-item-label { font-size: 13.5px; font-weight: 600; color: #f0f0f0; }
+.faucet-item:hover .faucet-item-label { color: #F5D64B; }
+.faucet-item-sub { font-size: 11.5px; color: #8a8a8e; }
+
+.faucet-menu-note {
+  margin-top: 6px;
+  padding: 8px 10px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  line-height: 1.45;
+  color: #8a8a8e;
+}
