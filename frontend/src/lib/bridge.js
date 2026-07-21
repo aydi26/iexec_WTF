@@ -146,7 +146,11 @@ async function publicDecryptWithRetry(handleClient, handle, onWait, timeoutMs = 
 // Each call: { address, abi, functionName, args, value?, key, label }.
 // ---------------------------------------------------------------------------
 async function tryBatch(wallet, waitReceipt, calls) {
-  if (!calls.length) return [];
+  // Empty list -> null (not []): [] is truthy, which would make runCalls treat
+  // an empty batch as "done" and silently skip. null routes to the (no-op)
+  // sequential loop instead. Unreachable today (all call sites pass >=2 calls),
+  // kept as belt-and-suspenders against a future caller.
+  if (!calls.length) return null;
 
   // (1) Capability probe — if this fails, NOTHING was submitted, so returning
   // null (→ sequential fallback) is safe.
