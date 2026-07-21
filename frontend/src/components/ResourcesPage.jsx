@@ -46,8 +46,10 @@ const docsTree = [
         {
           title: "Fewer signatures",
           items: [
-            "On wallets that support EIP-5792 atomic batching (e.g. MetaMask smart accounts), a whole phase = ONE signature: the 3 pre-registrations batch to 1, and wrap + 3 deposits + close batch to 1 — a full bridge drops to ~5 confirmations",
-            "Wallets without batching automatically fall back to signing each step (the proven path) — never a broken bridge",
+            "A serverless keeper runs the 5 permissionless steps for you — close, settle + CCTP burn, relay, integrity check, finalize — so on ANY wallet (incl. a plain Rabby / MetaMask EOA) you only sign pre-registrations, funding and deposits, never the protocol plumbing",
+            "Safe by design: those steps are gated by epoch state, the Circle attestation and the on-chain KMS proof — never by caller identity — so the keeper can never steal funds or alter amounts; the worst it can do is not advance an epoch (you can still self-serve)",
+            "On wallets that support EIP-5792 atomic batching (smart accounts), the steps you DO sign collapse further — a whole phase becomes one confirmation",
+            "If the keeper is ever unreachable, the app falls back to you signing those steps client-side (the proven path) — never a broken bridge",
             "The USDC approval is one-time (max allowance to the project's own Sourcify-verified wrapper); the first wrap includes headroom for the next bridge, so later bridges skip funding entirely",
           ],
         },

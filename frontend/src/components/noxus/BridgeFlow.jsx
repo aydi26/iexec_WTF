@@ -130,6 +130,20 @@ const fmtElapsed = (ms) => {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 };
 
+// Talk to the serverless keeper (/api/keeper). Runs the permissionless back half
+// so the user signs nothing after their deposits. On a deploy without the
+// function (or offline), the ping fails and bridge.js falls back to the user
+// signing those steps client-side — never a blocked bridge.
+async function callKeeper(phase, body) {
+  const r = await fetch("/api/keeper", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ phase, ...body }),
+  });
+  if (!r.ok) throw new Error(`keeper ${phase} failed (${r.status})`);
+  return r.json();
+}
+
 export default function BridgeFlow() {
   const { address, isConnected } = useAccount();
   const config = useConfig();
@@ -206,6 +220,7 @@ export default function BridgeFlow() {
         transfers,
         route,
         onStep,
+        keeper: callKeeper,
       });
       setElapsed(Date.now() - startRef.current);
       setResult(res);

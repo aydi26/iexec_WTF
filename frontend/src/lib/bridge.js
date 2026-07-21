@@ -264,6 +264,67 @@ async function runCalls(wallet, wait, pub, chainId, calls, step, batchNote) {
   return last;
 }
 
+// ---------------------------------------------------------------------------
+// Serverless keeper. The 5 permissionless steps (close, settle+burn, relay,
+// check, finalize) are, by design, gated by epoch state + the Circle attestation
+// + the on-chain KMS proof — never by caller identity — so a hosted keeper can
+// run them and CANNOT steal funds or alter amounts. Moving them off the user
+// means a plain EOA (Rabby / MetaMask, no EIP-5792) only signs preRegister x3 +
+// funding + deposit x3. `keeper(phase, body)` POSTs to the /api/keeper function;
+// if it is unavailable (local dev, offline) we fall back to the user signing
+// these steps client-side — the proven path — so a bridge is never blocked.
+// ---------------------------------------------------------------------------
+async function keeperAvailable(keeper) {
+  try {
+    const r = await keeper("ping", {});
+    return !!(r && r.ok);
+  } catch {
+    return false;
+  }
+}
+
+async function runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc, waitDst, SRC, DST, SRC_DOMAIN }) {
+  const eid = epochId.toString();
+  const dir = route.key;
+
+  step("close", "active", "keeper closing the epoch — no signature needed");
+  const c = await keeper("close", { direction: dir, epochId: eid });
+  if (c?.hash) await waitSrc(c.hash);
+  step("close", "done", "epoch closed by the keeper", c?.hash, SRC);
+
+  step("settle", "active", "keeper settling + bridging via CCTP…");
+  const s = await keeper("settle", { direction: dir, epochId: eid });
+  if (s?.hash) await waitSrc(s.hash);
+  const settleTxHash = s?.hash;
+  step("settle", "done", `settled + burned by the keeper · A=${s?.aggregate ?? total.toString()}`, settleTxHash, SRC);
+
+  step("relay-attest", "active", "keeper polling Circle Iris for the attestation…");
+  let att = { status: "pending" };
+  const t0 = Date.now();
+  while (Date.now() - t0 < 300_000) {
+    att = await keeper("attest", { direction: dir, domain: SRC_DOMAIN, txHash: settleTxHash });
+    if (att?.status === "complete") break;
+    step("relay-attest", "active", `keeper waiting for attestation… (${Math.round((Date.now() - t0) / 1000)}s)`);
+    await sleep(3000);
+  }
+  if (att?.status !== "complete") throw new Error("Iris attestation timeout (keeper)");
+  step("relay-attest", "done", "attestation received");
+
+  step("switch-arb-relay", "done", "handled by the keeper — no network switch needed");
+  step("relay", "active", "keeper relaying the mint + running the integrity check…");
+  const rc = await keeper("relaycheck", { direction: dir, epochId: eid, message: att.message, attestation: att.attestation });
+  step("relay", "done", "mint relayed by the keeper", rc?.relayHash, DST);
+  step("check", "done", "integrity check computed on-chain (Sum == A)", rc?.checkHash, DST);
+
+  step("finalize", "active", "keeper revealing the check result + finalizing…");
+  const f = await keeper("finalize", { direction: dir, epochId: eid });
+  if (f?.checkFailed) throw new Error(`integrity check failed (Sum != A): revealed ${f.value} (expected 1)`);
+  if (f?.hash) await waitDst(f.hash);
+  step("finalize", "done", "confidential distribution complete (keeper)", f?.hash, DST);
+
+  return { settleTxHash, aggregate: total };
+}
+
 /**
  * Run the full confidential cross-chain bridge in the direction described by `route`.
  *
@@ -287,6 +348,7 @@ export async function runConfidentialBridge({
   transfers,
   route,
   onStep,
+  keeper,
 }) {
   const step = (key, status, detail, txHash, chainId) =>
     onStep?.(key, status, detail, txHash, chainId);
@@ -328,6 +390,12 @@ export async function runConfidentialBridge({
 
   const waitSrc = (hash) => publicClientSource.waitForTransactionReceipt({ hash });
   const waitDst = (hash) => publicClientDest.waitForTransactionReceipt({ hash });
+
+  // If a keeper endpoint is reachable, it runs the 5 permissionless steps so the
+  // user signs nothing after their deposits. Otherwise the user signs them
+  // client-side (the proven path). Decided up front so `closeEpoch` is placed on
+  // the right side of the hand-off.
+  const useKeeper = typeof keeper === "function" ? await keeperAvailable(keeper) : false;
 
   // ---- step 1: read current epoch on the SOURCE --------------------------
   step("epoch", "active", "reading current epoch on ETH Sepolia");
@@ -445,18 +513,29 @@ export async function runConfidentialBridge({
       sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "deposit", args: [transfers[i].recipient, enc.handle, enc.handleProof, dstHandles[i]], key: `deposit-${i}`, label: `deposit → ${short(transfers[i].recipient)}` });
     }
 
-    // --- close the epoch (last in the batch: minDepositors is met by the deposits above) ---
-    sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "closeEpoch", args: [], key: "close", label: "close epoch" });
+    // --- close the epoch (last in the batch: minDepositors is met by the deposits
+    // above). Skipped here when a keeper is driving the back half — it closes. ---
+    if (!useKeeper) {
+      sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "closeEpoch", args: [], key: "close", label: "close epoch" });
+    }
 
-    step("fund", "active", "confirm the source leg — wrap + deposits + close (one signature if your wallet supports batching)");
+    step("fund", "active", `confirm the source leg — wrap + deposits${useKeeper ? "" : " + close"} (one signature if your wallet supports batching)`);
     await runCalls(wallet, waitSrc, publicClientSource, SRC, sourceCalls, step);
   } catch (e) {
     step("fund", "error", errMsg(e));
     throw e;
   }
 
-  // ---- step 5: settle (dual-proof) -> CCTP burn --------------------------
+  // ---- back half: settle -> Iris -> relay+check -> finalize --------------
+  // Keeper-driven when available (user signs nothing more), else client-side.
   let settleTxHash;
+  let aggregate = total;
+  if (useKeeper) {
+    const kr = await runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc, waitDst, SRC, DST, SRC_DOMAIN });
+    settleTxHash = kr.settleTxHash;
+    aggregate = kr.aggregate;
+  } else {
+  // ---- step 5: settle (dual-proof) -> CCTP burn --------------------------
   step("settle", "active", "reading epoch handles + revealing aggregate");
   try {
     const wallet = await getWalletClient(SRC);
@@ -537,7 +616,6 @@ export async function runConfidentialBridge({
 
   // ---- step 9: reveal the check result, finalize + distribute ------------
   step("finalize", "active", "revealing integrity result (KMS)…");
-  let aggregate = total;
   try {
     const wallet = await getWalletClient(DST);
     const handleClient = await createViemHandleClient(wallet);
@@ -588,17 +666,25 @@ export async function runConfidentialBridge({
     step("finalize", "error", errMsg(e));
     throw e;
   }
+  } // end client-side back half
 
   // ---- step 10: decrypt the recipient's Arb cUSDC balance (proof) --------
   let revealedBalance;
   step("done", "active", "confirming confidential credit on Arbitrum");
   try {
-    const wallet = await getWalletClient(DST);
+    let wallet = await getWalletClient(DST);
     const meDst = wallet.account?.address ?? wallet.account;
     // Only self-transfers can be locally decrypted by the connected wallet.
     const selfCredited = transfers.some(
       (t) => t.recipient?.toLowerCase() === String(meDst).toLowerCase()
     );
+    // In keeper mode the wallet never left the source chain; a self-recipient
+    // must switch to the destination to decrypt their own balance (a network
+    // switch, not a signature).
+    if (useKeeper && selfCredited) {
+      await switchChainAsync({ chainId: DST });
+      wallet = await getWalletClient(DST);
+    }
     if (selfCredited) {
       const balHandle = await publicClientDest.readContract({
         address: DEST_CUSDC_ADDRESS,
