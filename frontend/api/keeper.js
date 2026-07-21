@@ -28,6 +28,7 @@ import { createViemHandleClient } from "@iexec-nox/handle";
 const require = createRequire(import.meta.url);
 const BATCHER_ABI = require("../src/abis/NoxusBatcher.json");
 const DIST_ABI = require("../src/abis/NoxusDistributor.json");
+const CUSDC_ABI = require("../src/abis/NoxusCUSDC.json");
 const DEPLOY = {
   11155111: require("../src/deployments/11155111.json"),
   421614: require("../src/deployments/421614.json"),
@@ -63,6 +64,7 @@ function routeFor(direction) {
     dstDomain: CHAINS[d].domain,
     batcher: DEPLOY[s].NoxusBatcher,
     distributor: DEPLOY[d].NoxusDistributor,
+    cusdc: DEPLOY[s].NoxusCUSDC,
   };
 }
 
@@ -74,6 +76,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function send(pub, wallet, params) {
   const { request } = await pub.simulateContract({ ...params, account: wallet.account });
   return wallet.writeContract(request);
+}
+
+// Same, with an explicit nonce so several txs can be submitted back-to-back on
+// one chain without waiting for receipts (the mempool queues them in order).
+async function sendNonce(pub, wallet, params, nonce) {
+  const { request } = await pub.simulateContract({ ...params, account: wallet.account });
+  return wallet.writeContract({ ...request, nonce });
 }
 
 async function publicDecryptWithRetry(hc, handle, timeoutMs = 150_000) {
@@ -107,6 +116,99 @@ async function computeMaxFee(amount, srcDomain, dstDomain) {
 // ---- phase handlers --------------------------------------------------------
 // Each is idempotent-ish: it inspects epoch state and no-ops if the step is
 // already done, so a retried call never double-acts.
+
+// Batch fillers the keeper contributes so a user only signs THEIR OWN transfer.
+// Must stay in sync with FILLER_UNITS in BridgeFlow.jsx (the self-filler fallback).
+const FILLER_UNITS = [500_000n, 500_000n]; // 2 x 0.5 cUSD, returned to the keeper on dst
+
+// Per-instance dampener against concurrent duplicate fill calls (the on-chain
+// activeCount/entryAt guards below are the real protection; this just avoids
+// wasting encrypts when two calls race inside one warm lambda).
+const fillingNow = new Set();
+
+/**
+ * fill: deposit the 2 batch fillers (keeper-funded) into the CURRENT epoch so
+ * the user only signs 1 preRegister + 1 deposit. Triggered by the frontend the
+ * moment a bridge starts. Safe because:
+ *  - fillers are the keeper's own cUSDC, pre-registered to the keeper's own
+ *    address on the destination (they cycle back to the operator);
+ *  - guards: epoch must be Open, the keeper must not already have a live
+ *    deposit in it, and at most one other depositor may be present — so a
+ *    hostile caller can drain at most ONE filler pair per epoch, and a
+ *    stranded pair simply serves as the next bridge's fillers (self-healing);
+ *  - all txs are simulate-before-send (no reverted-tx gas drain).
+ * Submits without waiting for receipts (explicit nonces); the client polls the
+ * epoch's depositor count before asking for close.
+ */
+async function doFill(route, epochId) {
+  const dampKey = `${route.srcChainId}:${epochId}`;
+  if (fillingNow.has(dampKey)) return { skipped: true, reason: "fill already in progress" };
+  fillingNow.add(dampKey);
+  try {
+    const src = clients(route.srcChainId);
+    const dst = clients(route.dstChainId);
+    const me = account().address;
+
+    // Guards (state + idempotency + anti-drain).
+    const info = await src.pub.readContract({ address: route.batcher, abi: BATCHER_ABI, functionName: "epochInfo", args: [epochId] });
+    if (Number(info[0]) !== 0) return { skipped: true, reason: `epoch not open (state ${Number(info[0])})` };
+    const activeCount = Number(info[1]);
+    const entryCount = Number(info[4]);
+    for (let i = 0; i < entryCount; i++) {
+      const d = await src.pub.readContract({ address: route.batcher, abi: BATCHER_ABI, functionName: "entryAt", args: [epochId, BigInt(i)] });
+      if (String(d[0]).toLowerCase() === me.toLowerCase() && !d[3]) {
+        return { skipped: true, reason: "already filled" };
+      }
+    }
+    if (activeCount > 1) return { skipped: true, reason: "epoch already has co-depositors" };
+
+    // Filler liquidity check (best-effort): the keeper decrypts its own source
+    // cUSDC balance; if readable and short, refuse rather than deposit enc(0)
+    // (a zero-value transfer would flip the integrity check and force fallback).
+    const srcHc = await createViemHandleClient(src.wallet);
+    const need = FILLER_UNITS[0] + FILLER_UNITS[1];
+    try {
+      const balHandle = await src.pub.readContract({
+        address: route.cusdc, abi: CUSDC_ABI, functionName: "confidentialBalanceOf", args: [me],
+      });
+      if (balHandle && balHandle !== `0x${"0".repeat(64)}`) {
+        const dec = await srcHc.decrypt(balHandle);
+        if (BigInt(dec.value) < need) return { skipped: true, reason: "keeper filler liquidity exhausted" };
+      } else {
+        return { skipped: true, reason: "keeper filler liquidity exhausted" };
+      }
+    } catch { /* gateway blip — proceed on the pre-funded assumption */ }
+
+    // Encrypt all four inputs off-chain (2 dst claims + 2 src deposits)...
+    const dstHc = await createViemHandleClient(dst.wallet);
+    const fills = [];
+    for (const amount of FILLER_UNITS) {
+      const dstEnc = await dstHc.encryptInput(amount, "uint256", route.distributor);
+      const srcEnc = await srcHc.encryptInput(amount, "uint256", route.batcher);
+      fills.push({ dstEnc, srcEnc });
+    }
+
+    // ...then submit 2 preRegisters (dst) + 2 deposits (src) with explicit
+    // nonces, no receipt waits — the whole call returns in seconds.
+    const dstNonce = await dst.pub.getTransactionCount({ address: me, blockTag: "pending" });
+    const srcNonce = await src.pub.getTransactionCount({ address: me, blockTag: "pending" });
+    const preHashes = [];
+    const depHashes = [];
+    for (let i = 0; i < fills.length; i++) {
+      preHashes.push(await sendNonce(dst.pub, dst.wallet, {
+        address: route.distributor, abi: DIST_ABI, functionName: "preRegister",
+        args: [epochId, me, fills[i].dstEnc.handle, fills[i].dstEnc.handleProof],
+      }, dstNonce + i));
+      depHashes.push(await sendNonce(src.pub, src.wallet, {
+        address: route.batcher, abi: BATCHER_ABI, functionName: "deposit",
+        args: [me, fills[i].srcEnc.handle, fills[i].srcEnc.handleProof, fills[i].dstEnc.handle],
+      }, srcNonce + i));
+    }
+    return { preHashes, depHashes };
+  } finally {
+    fillingNow.delete(dampKey);
+  }
+}
 
 async function doClose(route, epochId) {
   const { pub, wallet } = clients(route.srcChainId);
@@ -207,6 +309,7 @@ export async function runPhase(body) {
   const epochId = body.epochId != null ? BigInt(body.epochId) : undefined;
   switch (phase) {
     case "ping": return { ok: true, keeper: account().address };
+    case "fill": return await doFill(route, epochId);
     case "close": return await doClose(route, epochId);
     case "settle": return await doSettle(route, epochId);
     case "attest": return await doAttest(body.domain, body.txHash);

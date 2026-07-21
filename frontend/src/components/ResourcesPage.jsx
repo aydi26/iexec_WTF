@@ -37,16 +37,16 @@ const docsTree = [
         {
           title: "The k=3 batch (why a little extra)",
           items: [
-            "Privacy needs a crowd: a batch must have at least 3 depositors to hide any single amount",
-            "So your transfer is bundled with 2 automatic filler transfers of 0.5 cUSD each (1 USDC total) back to yourself",
-            "The fillers are working liquidity, not a fee: they cross with the batch and land back in your wallet on the destination chain",
-            "You only enter your amount + destination — the fillers are handled in the background",
+            "Privacy needs a crowd: a batch must have at least 3 deposits to hide any single amount",
+            "The operator's keeper contributes the 2 filler transfers (0.5 cUSD each, from its own funds, cycling back to the operator) within seconds of you starting a bridge — so you only sign YOUR OWN transfer",
+            "If the keeper is offline or out of filler liquidity, the app falls back to you providing the 2 fillers yourself — they cross with the batch and land back in your wallet on the destination chain",
+            "You only enter your amount + destination — the batch mechanics are handled in the background",
           ],
         },
         {
           title: "Fewer signatures",
           items: [
-            "A serverless keeper runs the 5 permissionless steps for you — close, settle + CCTP burn, relay, integrity check, finalize — so on ANY wallet (incl. a plain Rabby / MetaMask EOA) you only sign pre-registrations, funding and deposits, never the protocol plumbing",
+            "A serverless keeper contributes the 2 batch fillers AND runs the 5 permissionless steps for you — close, settle + CCTP burn, relay, integrity check, finalize — so on ANY wallet (incl. a plain Rabby / MetaMask EOA) a recurring bridge is ~2-3 confirmations: your own pre-registration and deposit, plus funding the first time",
             "Safe by design: those steps are gated by epoch state, the Circle attestation and the on-chain KMS proof — never by caller identity — so the keeper can never steal funds or alter amounts; the worst it can do is not advance an epoch (you can still self-serve)",
             "On wallets that support EIP-5792 atomic batching (smart accounts), the steps you DO sign collapse further — a whole phase becomes one confirmation",
             "If the keeper is ever unreachable, the app falls back to you signing those steps client-side (the proven path) — never a broken bridge",

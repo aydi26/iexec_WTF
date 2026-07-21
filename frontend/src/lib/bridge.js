@@ -442,8 +442,6 @@ export async function runConfidentialBridge({
     }
   }
 
-  const total = transfers.reduce((a, t) => a + t.amount, 0n);
-
   const waitSrc = (hash) => publicClientSource.waitForTransactionReceipt({ hash });
   const waitDst = (hash) => publicClientDest.waitForTransactionReceipt({ hash });
 
@@ -460,7 +458,34 @@ export async function runConfidentialBridge({
     abi: BATCHER_ABI,
     functionName: "currentEpoch",
   });
-  step("epoch", "done", `epoch #${epochId.toString()} · A total ${total.toString()} base units`);
+  step("epoch", "done", `epoch #${epochId.toString()}`);
+
+  // ---- keeper fillers: triggered the moment the bridge starts -------------
+  // The keeper contributes the 2 batch fillers from ITS OWN cUSDC (they cycle
+  // back to the operator on the destination), so the user only signs THEIR OWN
+  // transfer: 1 preRegister + 1 deposit. If the keeper can't fill (offline,
+  // liquidity exhausted), we fall back to the classic self-filler mode — the
+  // user provides all 3 transfers, exactly the proven flow.
+  let effective = transfers;
+  if (useKeeper) {
+    step("prereg-1", "active", "keeper adding the 2 batch fillers…");
+    const f = await keeper("fill", { direction: route.key, epochId: epochId.toString() })
+      .catch((e) => ({ error: errMsg(e) }));
+    const filled =
+      !!f?.preHashes ||
+      f?.reason === "already filled" ||
+      f?.reason === "epoch already has co-depositors";
+    if (filled) {
+      effective = [transfers[0]];
+      step("prereg-1", "done", "filler pre-registered by the keeper");
+      step("prereg-2", "done", "filler pre-registered by the keeper");
+      step("deposit-1", "done", "filler deposited by the keeper");
+      step("deposit-2", "done", "filler deposited by the keeper");
+    } else {
+      step("prereg-1", "active", "keeper can't fill — you provide the fillers (classic mode)");
+    }
+  }
+  const total = effective.reduce((a, t) => a + t.amount, 0n);
 
   // ---- step 2: switch to Arb, pre-register each dst claim ----------------
   // Store each enc.handle as dstHandle_i — it MUST be reused verbatim in the
@@ -479,14 +504,14 @@ export async function runConfidentialBridge({
     const addr = wallet.account?.address ?? wallet.account;
     const handleClient = await noxClientFor(DST, addr);
     const calls = [];
-    for (let i = 0; i < transfers.length; i++) {
-      step(`prereg-${i}`, "active", `pre-register transfer ${i + 1}/3 → ${short(transfers[i].recipient)} · encrypting locally`);
-      const enc = await encryptWithRetry(handleClient, transfers[i].amount, DISTRIBUTOR_ADDRESS);
+    for (let i = 0; i < effective.length; i++) {
+      step(`prereg-${i}`, "active", `pre-register transfer ${i + 1}/${effective.length} → ${short(effective[i].recipient)} · encrypting locally`);
+      const enc = await encryptWithRetry(handleClient, effective[i].amount, DISTRIBUTOR_ADDRESS);
       dstHandles[i] = enc.handle;
       calls.push({
         address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "preRegister",
-        args: [epochId, transfers[i].recipient, enc.handle, enc.handleProof],
-        key: `prereg-${i}`, label: `pre-register → ${short(transfers[i].recipient)}`,
+        args: [epochId, effective[i].recipient, enc.handle, enc.handleProof],
+        key: `prereg-${i}`, label: `pre-register → ${short(effective[i].recipient)}`,
       });
     }
     step("prereg-0", "active", "confirm the pre-registrations (one signature if your wallet supports batching)");
@@ -566,10 +591,10 @@ export async function runConfidentialBridge({
     // --- deposits: encrypt off-chain, reuse the exact dstHandles[i] ---
     // RPC-pinned Nox client: encryption must never depend on the wallet's RPC.
     const depHc = await noxClientFor(SRC, me);
-    for (let i = 0; i < transfers.length; i++) {
-      step(`deposit-${i}`, "active", `deposit transfer ${i + 1}/3 → ${short(transfers[i].recipient)} · encrypting locally`);
-      const enc = await encryptWithRetry(depHc, transfers[i].amount, BATCHER_ADDRESS);
-      sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "deposit", args: [transfers[i].recipient, enc.handle, enc.handleProof, dstHandles[i]], key: `deposit-${i}`, label: `deposit → ${short(transfers[i].recipient)}` });
+    for (let i = 0; i < effective.length; i++) {
+      step(`deposit-${i}`, "active", `deposit transfer ${i + 1}/${effective.length} → ${short(effective[i].recipient)} · encrypting locally`);
+      const enc = await encryptWithRetry(depHc, effective[i].amount, BATCHER_ADDRESS);
+      sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "deposit", args: [effective[i].recipient, enc.handle, enc.handleProof, dstHandles[i]], key: `deposit-${i}`, label: `deposit → ${short(effective[i].recipient)}` });
     }
 
     // --- close the epoch (last in the batch: minDepositors is met by the deposits
@@ -590,6 +615,28 @@ export async function runConfidentialBridge({
   let settleTxHash;
   let aggregate = total;
   if (useKeeper) {
+    // The keeper's filler deposits were submitted without receipt waits — make
+    // sure the batch really holds 3 deposits before asking for close. (In the
+    // self-filler fallback the user already deposited 3, so this exits at once.)
+    try {
+      const t0 = Date.now();
+      for (;;) {
+        const info = await publicClientSource.readContract({
+          address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "epochInfo", args: [epochId],
+        });
+        if (Number(info[1]) >= 3 || Number(info[0]) !== 0) break; // full, or already closed by a concurrent flow
+        if (Date.now() - t0 > 240_000) {
+          throw new Error(
+            "the batch never reached 3 deposits — your funds are safe (a deposit can be withdrawn while the epoch is open); please retry in a moment"
+          );
+        }
+        step("close", "active", `waiting for the fillers to land… (${Number(info[1])}/3 deposits)`);
+        await sleep(4000);
+      }
+    } catch (e) {
+      step("close", "error", errMsg(e));
+      throw e;
+    }
     const kr = await runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc, waitDst, SRC, DST, SRC_DOMAIN });
     settleTxHash = kr.settleTxHash;
     aggregate = kr.aggregate;
@@ -736,7 +783,7 @@ export async function runConfidentialBridge({
     let wallet = await getWalletClient(DST);
     const meDst = wallet.account?.address ?? wallet.account;
     // Only self-transfers can be locally decrypted by the connected wallet.
-    const selfCredited = transfers.some(
+    const selfCredited = effective.some(
       (t) => t.recipient?.toLowerCase() === String(meDst).toLowerCase()
     );
     // In keeper mode the wallet never left the source chain; a self-recipient
