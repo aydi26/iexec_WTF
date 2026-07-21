@@ -21,6 +21,8 @@
 // pre-registrations first, then all ETH work, then Arb finalize.
 // ============================================================================
 
+import { encodeFunctionData } from "viem";
+import { sendCalls, getCapabilities, waitForCallsStatus } from "viem/actions";
 import { createViemHandleClient } from "@iexec-nox/handle";
 import {
   BATCHER_ABI,
@@ -134,6 +136,83 @@ async function publicDecryptWithRetry(handleClient, handle, onWait, timeoutMs = 
   }
 }
 
+// ---------------------------------------------------------------------------
+// EIP-5792 atomic batching. Runs a group of writes as ONE wallet confirmation
+// when the wallet supports it (MetaMask smart-account / EIP-7702, etc.), else
+// returns null so the caller runs them sequentially — the proven fallback path.
+// `forceAtomic` makes the bundle all-or-nothing: a revert rolls everything back,
+// so falling back is always safe (no partial state). Calls encrypt off-chain
+// FIRST (encryptInput never prompts), so a whole phase collapses to one signature.
+// Each call: { address, abi, functionName, args, value?, key, label }.
+// ---------------------------------------------------------------------------
+async function tryBatch(wallet, waitReceipt, calls) {
+  if (!calls.length) return [];
+
+  // (1) Capability probe — if this fails, NOTHING was submitted, so returning
+  // null (→ sequential fallback) is safe.
+  let caps;
+  try {
+    caps = await getCapabilities(wallet, { account: wallet.account.address, chainId: wallet.chain.id });
+  } catch {
+    return null; // no wallet_getCapabilities -> no EIP-5792
+  }
+  const atomic = caps?.atomic?.status;
+  if (atomic !== "supported" && atomic !== "ready") return null;
+
+  // (2) Submit the bundle. If sendCalls THROWS (rejected/unsupported), nothing
+  // executed → null → safe sequential fallback.
+  const encoded = calls.map((c) => ({
+    to: c.address,
+    data: encodeFunctionData({ abi: c.abi, functionName: c.functionName, args: c.args }),
+    ...(c.value != null ? { value: c.value } : {}),
+  }));
+  let submitted;
+  try {
+    submitted = await sendCalls(wallet, { account: wallet.account, chain: wallet.chain, calls: encoded, forceAtomic: true });
+  } catch {
+    return null; // rejected before submission -> safe to fall back
+  }
+  const id = typeof submitted === "string" ? submitted : submitted?.id;
+
+  // (3) The bundle IS submitted. From here we must NOT fall back to sequential —
+  // that would re-execute the same calls (double-spend). Resolve to success or
+  // throw. forceAtomic => a failure means the whole bundle reverted (no partial
+  // state), so throwing lets the user retry the flow cleanly.
+  if (!id) throw new Error("Batched transaction submitted but no bundle id was returned — please retry.");
+  const res = await waitForCallsStatus(wallet, { id, timeout: 240_000 });
+  const ok =
+    res.status === "success" ||
+    res.status === 200 ||
+    (Array.isArray(res.receipts) && res.receipts.length > 0 && res.status !== "failure" && res.status !== "reverted");
+  if (!ok) throw new Error("Batched transaction did not succeed — please retry.");
+  const receipts = res.receipts ?? [];
+  const last = receipts[receipts.length - 1]?.transactionHash;
+  if (last) { try { await waitReceipt(last); } catch { /* already mined in the bundle */ } }
+  return receipts;
+}
+
+// Execute a list of tagged calls either as one atomic batch or sequentially
+// (identical calls, identical order — so the fallback matches the proven flow).
+// Returns the last tx hash. `step`/`wait` drive the tracker + finality.
+async function runCalls(wallet, wait, chainId, calls, step, batchNote) {
+  const batched = await tryBatch(wallet, wait, calls);
+  if (batched) {
+    const h = batched[batched.length - 1]?.transactionHash;
+    for (const c of calls) step(c.key, "done", `${c.label} · batched`, undefined, chainId);
+    if (batchNote) step(calls[calls.length - 1].key, "done", batchNote, h, chainId);
+    return h;
+  }
+  let last;
+  for (const c of calls) {
+    step(c.key, "active", `${c.label} · confirm in wallet`);
+    last = await wallet.writeContract({ address: c.address, abi: c.abi, functionName: c.functionName, args: c.args, ...(c.value != null ? { value: c.value } : {}), account: wallet.account, chain: wallet.chain });
+    step(c.key, "active", `${c.label} · confirming`, last, chainId);
+    await wait(last);
+    step(c.key, "done", `${c.label} · done`, last, chainId);
+  }
+  return last;
+}
+
 /**
  * Run the full confidential cross-chain bridge in the direction described by `route`.
  *
@@ -216,37 +295,28 @@ export async function runConfidentialBridge({
   step("switch-arb-pre", "done", "on Arbitrum Sepolia");
 
   const dstHandles = [];
-  for (let i = 0; i < transfers.length; i++) {
-    const key = `prereg-${i}`;
-    const label = `pre-register transfer ${i + 1}/3 → ${short(transfers[i].recipient)}`;
-    step(key, "active", `${label} · encrypting locally`);
-    try {
-      // Fresh wallet client + handle client on Arb for each write.
-      const wallet = await getWalletClient(DST);
-      const handleClient = await createViemHandleClient(wallet);
-      const enc = await handleClient.encryptInput(
-        transfers[i].amount,
-        "uint256",
-        DISTRIBUTOR_ADDRESS
-      );
+  try {
+    // Encrypt all destination claims off-chain first (no signature), then
+    // pre-register them in ONE batched confirmation (or sequentially if the
+    // wallet can't batch).
+    const wallet = await getWalletClient(DST);
+    const handleClient = await createViemHandleClient(wallet);
+    const calls = [];
+    for (let i = 0; i < transfers.length; i++) {
+      step(`prereg-${i}`, "active", `pre-register transfer ${i + 1}/3 → ${short(transfers[i].recipient)} · encrypting locally`);
+      const enc = await handleClient.encryptInput(transfers[i].amount, "uint256", DISTRIBUTOR_ADDRESS);
       dstHandles[i] = enc.handle;
-
-      step(key, "active", `${label} · confirm preRegister in wallet`);
-      const hash = await wallet.writeContract({
-        address: DISTRIBUTOR_ADDRESS,
-        abi: DISTRIBUTOR_ABI,
-        functionName: "preRegister",
+      calls.push({
+        address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "preRegister",
         args: [epochId, transfers[i].recipient, enc.handle, enc.handleProof],
-        account: wallet.account,
-        chain: wallet.chain,
+        key: `prereg-${i}`, label: `pre-register → ${short(transfers[i].recipient)}`,
       });
-      step(key, "active", `${label} · confirming`, hash, DST);
-      await waitDst(hash);
-      step(key, "done", `${label} · pre-registered`, hash, DST);
-    } catch (e) {
-      step(key, "error", errMsg(e));
-      throw e;
     }
+    step("prereg-0", "active", "confirm the pre-registrations (one signature if your wallet supports batching)");
+    await runCalls(wallet, waitDst, DST, calls, step);
+  } catch (e) {
+    step("prereg-0", "error", errMsg(e));
+    throw e;
   }
 
   // ---- step 3: switch to ETH, fund + deposit each -----------------------
@@ -254,24 +324,22 @@ export async function runConfidentialBridge({
   await switchChainAsync({ chainId: SRC });
   step("switch-eth", "done", "on Ethereum Sepolia");
 
-  // Funding: ensure enough confidential cUSDC + operator authorization.
-  step("fund", "active", "checking confidential cUSDC balance");
+  // Source leg built as ONE call list: funding (as needed) + 3 deposits + close.
+  // Encrypt off-chain first (no signature), then run it as a single batched
+  // confirmation, or sequentially (identical calls, identical order) as fallback.
   let me;
   try {
     const wallet = await getWalletClient(SRC);
     me = wallet.account?.address ?? wallet.account;
+    const sourceCalls = [];
 
-    // Read the confidential balance handle and decrypt it (best-effort — if the
-    // decrypt fails we conservatively assume 0 and wrap generously, capped by
-    // the plain USDC balance so wrap can never revert).
+    // --- funding: decide approve/wrap/setOperator (append only if needed) ---
+    step("fund", "active", "checking confidential cUSDC balance");
     let confBal = 0n;
     let confBalKnown = true; // false only when the read/decrypt itself failed
     try {
       const balHandle = await publicClientSource.readContract({
-        address: CUSDC_ADDRESS,
-        abi: CUSDC_ABI,
-        functionName: "confidentialBalanceOf",
-        args: [me],
+        address: CUSDC_ADDRESS, abi: CUSDC_ABI, functionName: "confidentialBalanceOf", args: [me],
       });
       if (balHandle && balHandle !== ZERO_BYTES32) {
         const hc = await createViemHandleClient(wallet);
@@ -283,18 +351,10 @@ export async function runConfidentialBridge({
       confBalKnown = false;
     }
 
-    let wrapped = false;
     if (confBal < total) {
       const shortfall = total - confBal;
-
-      // Wrap enough for THIS bridge plus headroom for the next one, capped by
-      // the plain USDC we actually hold — so wrap can never revert, and later
-      // bridges skip the wrap tx entirely.
       const usdcBal = await publicClientSource.readContract({
-        address: USDC_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: "balanceOf",
-        args: [me],
+        address: USDC_ADDRESS, abi: ERC20_ABI, functionName: "balanceOf", args: [me],
       });
       if (confBalKnown && usdcBal < shortfall) {
         throw new Error(
@@ -302,139 +362,45 @@ export async function runConfidentialBridge({
             `need ${fmtUsdc(shortfall)} USDC, have ${fmtUsdc(usdcBal)} USDC.`
         );
       }
+      // Wrap this bridge's shortfall + headroom for the next, capped by the plain
+      // USDC actually held (so wrap can never revert; later bridges skip the wrap).
       const target = shortfall + WRAP_HEADROOM;
       const wrapAmt = usdcBal < target ? usdcBal : target;
-
       if (wrapAmt > 0n) {
-        step(
-          "fund",
-          "active",
-          `funding: wrapping ${fmtUsdc(wrapAmt)} USDC → cUSDC (covers this bridge + headroom for the next)`
-        );
-
-        // Approve underlying USDC for the wrapper (only if needed).
-        // SECURITY RATIONALE for the max allowance: the spender is our own
-        // Sourcify-verified NoxusCUSDC wrapper (route.cusdc), which can only
-        // pull USDC when the user explicitly calls wrap() — this is the
-        // standard max-allowance pattern for a first-party wrapper, not a
-        // third-party spender. Approving once means later bridges never
-        // re-prompt for approval.
+        // Max allowance to our OWN Sourcify-verified wrapper (it can only pull
+        // USDC on an explicit wrap()) — standard first-party pattern; one-time.
         const allowance = await publicClientSource.readContract({
-          address: USDC_ADDRESS,
-          abi: ERC20_ABI,
-          functionName: "allowance",
-          args: [me, CUSDC_ADDRESS],
+          address: USDC_ADDRESS, abi: ERC20_ABI, functionName: "allowance", args: [me, CUSDC_ADDRESS],
         });
         if (allowance < wrapAmt) {
-          step("fund", "active", "confirm one-time USDC approval (max) in wallet — future bridges skip this");
-          const ah = await wallet.writeContract({
-            address: USDC_ADDRESS,
-            abi: ERC20_ABI,
-            functionName: "approve",
-            args: [CUSDC_ADDRESS, MAX_UINT256],
-            account: wallet.account,
-            chain: wallet.chain,
-          });
-          step("fund", "active", "confirming one-time approval", ah, SRC);
-          await waitSrc(ah);
+          sourceCalls.push({ address: USDC_ADDRESS, abi: ERC20_ABI, functionName: "approve", args: [CUSDC_ADDRESS, MAX_UINT256], key: "fund", label: "one-time USDC approval (max)" });
         }
-
-        step("fund", "active", "confirm wrap in wallet");
-        const wh = await wallet.writeContract({
-          address: CUSDC_ADDRESS,
-          abi: CUSDC_ABI,
-          functionName: "wrap",
-          args: [me, wrapAmt],
-          account: wallet.account,
-          chain: wallet.chain,
-        });
-        step("fund", "active", "confirming wrap", wh, SRC);
-        await waitSrc(wh);
-        wrapped = true;
+        sourceCalls.push({ address: CUSDC_ADDRESS, abi: CUSDC_ABI, functionName: "wrap", args: [me, wrapAmt], key: "fund", label: `wrap ${fmtUsdc(wrapAmt)} USDC → cUSDC` });
       }
     }
-
-    // operator authorization for the batcher (only if not already)
     const isOp = await publicClientSource.readContract({
-      address: CUSDC_ADDRESS,
-      abi: CUSDC_ABI,
-      functionName: "isOperator",
-      args: [me, BATCHER_ADDRESS],
+      address: CUSDC_ADDRESS, abi: CUSDC_ABI, functionName: "isOperator", args: [me, BATCHER_ADDRESS],
     });
     if (!isOp) {
-      step("fund", "active", "confirm setOperator(batcher) in wallet");
-      const oh = await wallet.writeContract({
-        address: CUSDC_ADDRESS,
-        abi: CUSDC_ABI,
-        functionName: "setOperator",
-        args: [BATCHER_ADDRESS, FAR_FUTURE_EXPIRY],
-        account: wallet.account,
-        chain: wallet.chain,
-      });
-      step("fund", "active", "confirming setOperator", oh, SRC);
-      await waitSrc(oh);
+      sourceCalls.push({ address: CUSDC_ADDRESS, abi: CUSDC_ABI, functionName: "setOperator", args: [BATCHER_ADDRESS, FAR_FUTURE_EXPIRY], key: "fund", label: "authorize the batcher (setOperator)" });
     }
-    step(
-      "fund",
-      "done",
-      wrapped
-        ? "funded (incl. headroom for the next bridge) + batcher authorized"
-        : "already funded — no approval needed"
-    );
+    if (sourceCalls.length === 0) step("fund", "done", "already funded — no funding transactions needed");
+
+    // --- deposits: encrypt off-chain, reuse the exact dstHandles[i] ---
+    const depHc = await createViemHandleClient(wallet);
+    for (let i = 0; i < transfers.length; i++) {
+      step(`deposit-${i}`, "active", `deposit transfer ${i + 1}/3 → ${short(transfers[i].recipient)} · encrypting locally`);
+      const enc = await depHc.encryptInput(transfers[i].amount, "uint256", BATCHER_ADDRESS);
+      sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "deposit", args: [transfers[i].recipient, enc.handle, enc.handleProof, dstHandles[i]], key: `deposit-${i}`, label: `deposit → ${short(transfers[i].recipient)}` });
+    }
+
+    // --- close the epoch (last in the batch: minDepositors is met by the deposits above) ---
+    sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "closeEpoch", args: [], key: "close", label: "close epoch" });
+
+    step("fund", "active", "confirm the source leg — wrap + deposits + close (one signature if your wallet supports batching)");
+    await runCalls(wallet, waitSrc, SRC, sourceCalls, step);
   } catch (e) {
     step("fund", "error", errMsg(e));
-    throw e;
-  }
-
-  // deposit each encrypted amount on ETH, re-using dstHandles[i].
-  for (let i = 0; i < transfers.length; i++) {
-    const key = `deposit-${i}`;
-    const label = `deposit transfer ${i + 1}/3 → ${short(transfers[i].recipient)}`;
-    step(key, "active", `${label} · encrypting locally`);
-    try {
-      const wallet = await getWalletClient(SRC);
-      const handleClient = await createViemHandleClient(wallet);
-      const enc = await handleClient.encryptInput(
-        transfers[i].amount,
-        "uint256",
-        BATCHER_ADDRESS
-      );
-
-      step(key, "active", `${label} · confirm deposit in wallet`);
-      const hash = await wallet.writeContract({
-        address: BATCHER_ADDRESS,
-        abi: BATCHER_ABI,
-        functionName: "deposit",
-        args: [transfers[i].recipient, enc.handle, enc.handleProof, dstHandles[i]],
-        account: wallet.account,
-        chain: wallet.chain,
-      });
-      step(key, "active", `${label} · confirming`, hash, SRC);
-      await waitSrc(hash);
-      step(key, "done", `${label} · deposited (amount hidden)`, hash, SRC);
-    } catch (e) {
-      step(key, "error", errMsg(e));
-      throw e;
-    }
-  }
-
-  // ---- step 4: close the epoch -------------------------------------------
-  step("close", "active", "confirm closeEpoch in wallet");
-  try {
-    const wallet = await getWalletClient(SRC);
-    const hash = await wallet.writeContract({
-      address: BATCHER_ADDRESS,
-      abi: BATCHER_ABI,
-      functionName: "closeEpoch",
-      args: [],
-      account: wallet.account,
-      chain: wallet.chain,
-    });
-    step("close", "active", "confirming", hash, SRC);
-    await waitSrc(hash);
-    step("close", "done", "epoch closed", hash, SRC);
-  } catch (e) {
-    step("close", "error", errMsg(e));
     throw e;
   }
 
@@ -498,42 +464,19 @@ export async function runConfidentialBridge({
   await switchChainAsync({ chainId: DST });
   step("switch-arb-relay", "done", "on Arbitrum Sepolia");
 
-  step("relay", "active", "confirm relayReceive in wallet");
+  // relayReceive + checkEpoch as ONE batch: relay mints A and ingests the claims,
+  // then checkEpoch computes Sum == A in the same atomic tx (no off-chain step
+  // between them). Falls back to two sequential txs.
   try {
     const wallet = await getWalletClient(DST);
-    const hash = await wallet.writeContract({
-      address: DISTRIBUTOR_ADDRESS,
-      abi: DISTRIBUTOR_ABI,
-      functionName: "relayReceive",
-      args: [message, attestation],
-      account: wallet.account,
-      chain: wallet.chain,
-    });
-    step("relay", "active", "confirming", hash, DST);
-    await waitDst(hash);
-    step("relay", "done", "mint relayed to Arbitrum", hash, DST);
+    const calls = [
+      { address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "relayReceive", args: [message, attestation], key: "relay", label: "relay mint (relayReceive)" },
+      { address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "checkEpoch", args: [epochId], key: "check", label: "integrity check (Sum == A)" },
+    ];
+    step("relay", "active", "confirm relay + integrity check (one signature if your wallet supports batching)");
+    await runCalls(wallet, waitDst, DST, calls, step);
   } catch (e) {
     step("relay", "error", errMsg(e));
-    throw e;
-  }
-
-  // ---- step 8: on-chain integrity check ----------------------------------
-  step("check", "active", "confirm checkEpoch (integrity: Sum == A) in wallet");
-  try {
-    const wallet = await getWalletClient(DST);
-    const hash = await wallet.writeContract({
-      address: DISTRIBUTOR_ADDRESS,
-      abi: DISTRIBUTOR_ABI,
-      functionName: "checkEpoch",
-      args: [epochId],
-      account: wallet.account,
-      chain: wallet.chain,
-    });
-    step("check", "active", "confirming", hash, DST);
-    await waitDst(hash);
-    step("check", "done", "integrity check requested", hash, DST);
-  } catch (e) {
-    step("check", "error", errMsg(e));
     throw e;
   }
 

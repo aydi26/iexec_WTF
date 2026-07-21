@@ -44,11 +44,11 @@ const docsTree = [
           ],
         },
         {
-          title: "Fewer signatures over time",
+          title: "Fewer signatures",
           items: [
-            "The USDC approval is one-time (max allowance to the project's own Sourcify-verified wrapper)",
-            "The first wrap includes headroom for the next bridge's fillers, so later bridges skip the funding step entirely",
-            "From your second bridge on, you only sign the pre-registrations, the encrypted deposits and the protocol steps",
+            "On wallets that support EIP-5792 atomic batching (e.g. MetaMask smart accounts), a whole phase = ONE signature: the 3 pre-registrations batch to 1, and wrap + 3 deposits + close batch to 1 — a full bridge drops to ~5 confirmations",
+            "Wallets without batching automatically fall back to signing each step (the proven path) — never a broken bridge",
+            "The USDC approval is one-time (max allowance to the project's own Sourcify-verified wrapper); the first wrap includes headroom for the next bridge, so later bridges skip funding entirely",
           ],
         },
       ],
