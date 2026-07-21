@@ -137,6 +137,49 @@ async function publicDecryptWithRetry(handleClient, handle, onWait, timeoutMs = 
 }
 
 // ---------------------------------------------------------------------------
+// Submission resilience. A wallet broadcasts through ITS OWN RPC; public ones
+// (e.g. the Tenderly gateway MetaMask defaults to on Sepolia) rate-limit under a
+// burst of txs. These classifiers + a nonce-guarded retry let a transient
+// rate-limit self-heal instead of aborting the whole bridge.
+// ---------------------------------------------------------------------------
+function isUserReject(e) {
+  const s = String(e?.shortMessage || e?.message || e);
+  return /user rejected|user denied|rejected the request|4001|action_rejected/i.test(s);
+}
+function isTransientRpc(e) {
+  const s = String(e?.shortMessage || e?.message || e?.details || e);
+  return /rate.?limit|too many requests|429|limit exceeded|timeout|timed out|failed to fetch|network ?error|load failed|econn|503|502|-32005|temporarily|try again/i.test(s);
+}
+
+// writeContract with a bounded retry on transient RPC / rate-limit errors. The
+// nonce guard makes retrying safe: if the account nonce advanced after the error,
+// a tx already went out, so we STOP (surface the error) rather than risk a
+// double-send. User-rejections and real reverts are never retried.
+async function writeResilient(wallet, pub, params, onNote) {
+  const addr = params.account?.address ?? params.account;
+  for (let attempt = 0; ; attempt++) {
+    let nonceBefore = null;
+    try {
+      if (pub && addr) nonceBefore = await pub.getTransactionCount({ address: addr, blockTag: "pending" });
+    } catch { /* best-effort */ }
+    try {
+      return await wallet.writeContract(params);
+    } catch (e) {
+      if (isUserReject(e) || !isTransientRpc(e) || attempt >= 3) throw e;
+      // Did a tx land despite the RPC error? If so, don't re-send.
+      if (pub && addr && nonceBefore != null) {
+        await sleep(2500);
+        let after = null;
+        try { after = await pub.getTransactionCount({ address: addr, blockTag: "latest" }); } catch { /* ignore */ }
+        if (after != null && after > nonceBefore) throw e;
+      }
+      onNote?.(`RPC busy — retrying (${attempt + 1}/3)…`);
+      await sleep(1500 * (attempt + 1));
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // EIP-5792 atomic batching. Runs a group of writes as ONE wallet confirmation
 // when the wallet supports it (MetaMask smart-account / EIP-7702, etc.), else
 // returns null so the caller runs them sequentially — the proven fallback path.
@@ -198,7 +241,7 @@ async function tryBatch(wallet, waitReceipt, calls) {
 // Execute a list of tagged calls either as one atomic batch or sequentially
 // (identical calls, identical order — so the fallback matches the proven flow).
 // Returns the last tx hash. `step`/`wait` drive the tracker + finality.
-async function runCalls(wallet, wait, chainId, calls, step, batchNote) {
+async function runCalls(wallet, wait, pub, chainId, calls, step, batchNote) {
   const batched = await tryBatch(wallet, wait, calls);
   if (batched) {
     const h = batched[batched.length - 1]?.transactionHash;
@@ -209,7 +252,11 @@ async function runCalls(wallet, wait, chainId, calls, step, batchNote) {
   let last;
   for (const c of calls) {
     step(c.key, "active", `${c.label} · confirm in wallet`);
-    last = await wallet.writeContract({ address: c.address, abi: c.abi, functionName: c.functionName, args: c.args, ...(c.value != null ? { value: c.value } : {}), account: wallet.account, chain: wallet.chain });
+    last = await writeResilient(
+      wallet, pub,
+      { address: c.address, abi: c.abi, functionName: c.functionName, args: c.args, ...(c.value != null ? { value: c.value } : {}), account: wallet.account, chain: wallet.chain },
+      (n) => step(c.key, "active", `${c.label} · ${n}`)
+    );
     step(c.key, "active", `${c.label} · confirming`, last, chainId);
     await wait(last);
     step(c.key, "done", `${c.label} · done`, last, chainId);
@@ -317,7 +364,7 @@ export async function runConfidentialBridge({
       });
     }
     step("prereg-0", "active", "confirm the pre-registrations (one signature if your wallet supports batching)");
-    await runCalls(wallet, waitDst, DST, calls, step);
+    await runCalls(wallet, waitDst, publicClientDest, DST, calls, step);
   } catch (e) {
     step("prereg-0", "error", errMsg(e));
     throw e;
@@ -402,7 +449,7 @@ export async function runConfidentialBridge({
     sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "closeEpoch", args: [], key: "close", label: "close epoch" });
 
     step("fund", "active", "confirm the source leg — wrap + deposits + close (one signature if your wallet supports batching)");
-    await runCalls(wallet, waitSrc, SRC, sourceCalls, step);
+    await runCalls(wallet, waitSrc, publicClientSource, SRC, sourceCalls, step);
   } catch (e) {
     step("fund", "error", errMsg(e));
     throw e;
@@ -432,14 +479,18 @@ export async function runConfidentialBridge({
     const maxFee = await computeMaxFee(total, SRC_DOMAIN, DST_DOMAIN);
 
     step("settle", "active", "confirm settleEpoch (burns + bridges) in wallet");
-    settleTxHash = await wallet.writeContract({
-      address: BATCHER_ADDRESS,
-      abi: BATCHER_ABI,
-      functionName: "settleEpoch",
-      args: [sumRes.decryptionProof, unwrapRes.decryptionProof, maxFee],
-      account: wallet.account,
-      chain: wallet.chain,
-    });
+    settleTxHash = await writeResilient(
+      wallet, publicClientSource,
+      {
+        address: BATCHER_ADDRESS,
+        abi: BATCHER_ABI,
+        functionName: "settleEpoch",
+        args: [sumRes.decryptionProof, unwrapRes.decryptionProof, maxFee],
+        account: wallet.account,
+        chain: wallet.chain,
+      },
+      (n) => step("settle", "active", `burn · ${n}`)
+    );
     step("settle", "active", "confirming burn", settleTxHash, SRC);
     await waitSrc(settleTxHash);
     step("settle", "done", `settled + burned · A=${sumRes.value.toString()}`, settleTxHash, SRC);
@@ -478,7 +529,7 @@ export async function runConfidentialBridge({
       { address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "checkEpoch", args: [epochId], key: "check", label: "integrity check (Sum == A)" },
     ];
     step("relay", "active", "confirm relay + integrity check (one signature if your wallet supports batching)");
-    await runCalls(wallet, waitDst, DST, calls, step);
+    await runCalls(wallet, waitDst, publicClientDest, DST, calls, step);
   } catch (e) {
     step("relay", "error", errMsg(e));
     throw e;
@@ -505,14 +556,18 @@ export async function runConfidentialBridge({
     }
 
     step("finalize", "active", "check == 1 (ok) · confirm finalizeEpoch in wallet");
-    const hash = await wallet.writeContract({
-      address: DISTRIBUTOR_ADDRESS,
-      abi: DISTRIBUTOR_ABI,
-      functionName: "finalizeEpoch",
-      args: [epochId, checkRes.decryptionProof],
-      account: wallet.account,
-      chain: wallet.chain,
-    });
+    const hash = await writeResilient(
+      wallet, publicClientDest,
+      {
+        address: DISTRIBUTOR_ADDRESS,
+        abi: DISTRIBUTOR_ABI,
+        functionName: "finalizeEpoch",
+        args: [epochId, checkRes.decryptionProof],
+        account: wallet.account,
+        chain: wallet.chain,
+      },
+      (n) => step("finalize", "active", `distribution · ${n}`)
+    );
     step("finalize", "active", "confirming distribution", hash, DST);
     await waitDst(hash);
 
@@ -577,7 +632,17 @@ function short(a) {
   return s.length <= 12 ? s : `${s.slice(0, 6)}…${s.slice(-4)}`;
 }
 function errMsg(e) {
-  return (e?.shortMessage || e?.message || String(e) || "step failed").slice(0, 240);
+  const raw = e?.shortMessage || e?.message || String(e) || "step failed";
+  // A rate-limit here is the wallet's OWN RPC throttling (it broadcasts through
+  // it), not the app's. Turn the cryptic provider error into a concrete fix.
+  if (/rate.?limit|too many requests|429|limit exceeded/i.test(raw)) {
+    return (
+      "Your wallet's RPC for this network is rate-limited (it broadcasts through its own RPC, not the app's). " +
+      "Point it at a reliable endpoint and retry — Rabby: More → Modify RPC URL for this network; MetaMask: Settings → Networks. " +
+      "Sepolia: https://ethereum-sepolia-rpc.publicnode.com · Arbitrum Sepolia: https://arbitrum-sepolia-rpc.publicnode.com"
+    );
+  }
+  return raw.slice(0, 240);
 }
 /** Format USDC base units (6 decimals) as a human-readable decimal string. */
 function fmtUsdc(v) {
