@@ -68,6 +68,14 @@ function routeFor(direction) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Simulate-then-send: the keeper never broadcasts a tx that would revert, so a
+// hostile caller can't drain its gas by requesting phases in invalid states
+// (each phase also state-checks and no-ops, but simulation closes the race).
+async function send(pub, wallet, params) {
+  const { request } = await pub.simulateContract({ ...params, account: wallet.account });
+  return wallet.writeContract(request);
+}
+
 async function publicDecryptWithRetry(hc, handle, timeoutMs = 150_000) {
   const t0 = Date.now();
   let delay = 1500;
@@ -105,7 +113,7 @@ async function doClose(route, epochId) {
   const info = await pub.readContract({ address: route.batcher, abi: BATCHER_ABI, functionName: "epochInfo", args: [epochId] });
   const state = Number(info[0]);
   if (state !== 0) return { hash: null, skipped: true, state }; // already Closed/Settled
-  const hash = await wallet.writeContract({ address: route.batcher, abi: BATCHER_ABI, functionName: "closeEpoch", args: [] });
+  const hash = await send(pub, wallet, { address: route.batcher, abi: BATCHER_ABI, functionName: "closeEpoch", args: [] });
   return { hash };
 }
 
@@ -126,7 +134,7 @@ async function doSettle(route, epochId) {
   ]);
   const total = sumRes.value;
   const maxFee = await computeMaxFee(total, route.srcDomain, route.dstDomain);
-  const hash = await wallet.writeContract({
+  const hash = await send(pub, wallet, {
     address: route.batcher, abi: BATCHER_ABI, functionName: "settleEpoch",
     args: [sumRes.decryptionProof, unwrapRes.decryptionProof, maxFee],
   });
@@ -162,13 +170,13 @@ async function doRelayCheck(route, epochId, message, attestation) {
   let relayHash = null;
   let di = await pub.readContract({ address: route.distributor, abi: DIST_ABI, functionName: "epochInfo", args: [epochId] });
   if (Number(di[0]) < 2) {
-    relayHash = await wallet.writeContract({ address: route.distributor, abi: DIST_ABI, functionName: "relayReceive", args: [message, attestation] });
+    relayHash = await send(pub, wallet, { address: route.distributor, abi: DIST_ABI, functionName: "relayReceive", args: [message, attestation] });
     await pub.waitForTransactionReceipt({ hash: relayHash });
     di = await pub.readContract({ address: route.distributor, abi: DIST_ABI, functionName: "epochInfo", args: [epochId] });
   }
   let checkHash = null;
   if (Number(di[0]) === 2) {
-    checkHash = await wallet.writeContract({ address: route.distributor, abi: DIST_ABI, functionName: "checkEpoch", args: [epochId] });
+    checkHash = await send(pub, wallet, { address: route.distributor, abi: DIST_ABI, functionName: "checkEpoch", args: [epochId] });
     await pub.waitForTransactionReceipt({ hash: checkHash });
   }
   return { relayHash, checkHash, state: Number(di[0]) };
@@ -186,7 +194,7 @@ async function doFinalize(route, epochId) {
     // not finalize. Surface it; the client shows the failure.
     return { hash: null, checkFailed: true, value: checkRes.value.toString() };
   }
-  const hash = await wallet.writeContract({ address: route.distributor, abi: DIST_ABI, functionName: "finalizeEpoch", args: [epochId, checkRes.decryptionProof] });
+  const hash = await send(pub, wallet, { address: route.distributor, abi: DIST_ABI, functionName: "finalizeEpoch", args: [epochId, checkRes.decryptionProof] });
   await pub.waitForTransactionReceipt({ hash });
   const di2 = await pub.readContract({ address: route.distributor, abi: DIST_ABI, functionName: "epochInfo", args: [epochId] });
   return { hash, state: Number(di2[0]) };

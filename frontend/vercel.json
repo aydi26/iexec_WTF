@@ -4,6 +4,12 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/keeper.js": {
+      "maxDuration": 60,
+      "includeFiles": "src/{abis,deployments}/**"
+    }
+  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
