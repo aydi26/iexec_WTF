@@ -85,7 +85,9 @@ async function sendNonce(pub, wallet, params, nonce) {
   return wallet.writeContract({ ...request, nonce });
 }
 
-async function publicDecryptWithRetry(hc, handle, timeoutMs = 150_000) {
+// 45s < the function's 60s maxDuration, so a slow KMS reveal returns an error the
+// frontend can retry rather than the whole function hard-timing-out at the wall.
+async function publicDecryptWithRetry(hc, handle, timeoutMs = 45_000) {
   const t0 = Date.now();
   let delay = 1500;
   for (;;) {
