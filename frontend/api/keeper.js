@@ -19,21 +19,20 @@
 // frontend waits for each tx via its own resilient RPC and orchestrates order.
 // ============================================================================
 
+import { createRequire } from "node:module";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia, arbitrumSepolia } from "viem/chains";
 import { createViemHandleClient } from "@iexec-nox/handle";
-// Static JSON imports (bundled at build time) instead of runtime createRequire:
-// the ABIs/addresses are inlined into the serverless bundle, so the function
-// never depends on includeFiles being copied to the right relative path at
-// runtime — it deploys correctly regardless of the Vercel root directory.
-import BATCHER_ABI from "../src/abis/NoxusBatcher.json" with { type: "json" };
-import DIST_ABI from "../src/abis/NoxusDistributor.json" with { type: "json" };
-import CUSDC_ABI from "../src/abis/NoxusCUSDC.json" with { type: "json" };
-import DEP_ETH from "../src/deployments/11155111.json" with { type: "json" };
-import DEP_ARB from "../src/deployments/421614.json" with { type: "json" };
 
-const DEPLOY = { 11155111: DEP_ETH, 421614: DEP_ARB };
+const require = createRequire(import.meta.url);
+const BATCHER_ABI = require("../src/abis/NoxusBatcher.json");
+const DIST_ABI = require("../src/abis/NoxusDistributor.json");
+const CUSDC_ABI = require("../src/abis/NoxusCUSDC.json");
+const DEPLOY = {
+  11155111: require("../src/deployments/11155111.json"),
+  421614: require("../src/deployments/421614.json"),
+};
 
 const IRIS = "https://iris-api-sandbox.circle.com";
 const CHAINS = {

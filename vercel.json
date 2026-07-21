@@ -4,13 +4,7 @@
   "installCommand": "cd frontend && npm install",
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
-  "functions": {
-    "api/keeper.mjs": {
-      "maxDuration": 60,
-      "includeFiles": "frontend/src/{abis,deployments}/**"
-    }
-  },
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
