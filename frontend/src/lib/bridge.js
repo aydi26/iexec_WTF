@@ -21,7 +21,9 @@
 // pre-registrations first, then all ETH work, then Arb finalize.
 // ============================================================================
 
-import { encodeFunctionData } from "viem";
+import { createWalletClient, encodeFunctionData, fallback, http } from "viem";
+import { toAccount } from "viem/accounts";
+import { sepolia, arbitrumSepolia } from "viem/chains";
 import { sendCalls, getCapabilities, waitForCallsStatus } from "viem/actions";
 import { createViemHandleClient } from "@iexec-nox/handle";
 import {
@@ -31,6 +33,7 @@ import {
   ERC20_ABI,
   FAR_FUTURE_EXPIRY,
 } from "../config/contracts";
+import { RPC_URLS } from "../config/wagmi";
 
 const IRIS = "https://iris-api-sandbox.circle.com";
 const ZERO_BYTES32 =
@@ -113,6 +116,59 @@ async function fetchAttestation(srcDomain, burnTxHash, onWait, timeoutMs = 300_0
     if (onWait) onWait(`waiting for Circle attestation… (${Math.round((Date.now() - t0) / 1000)}s)`);
     await sleep(delay);
     delay = Math.min(delay * 1.3, 8000);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Nox handle clients pinned to OUR resilient RPCs.
+// The SDK extends whatever viem client it is given with publicActions and runs
+// ALL its on-chain reads through that client's transport — so a client built
+// from the injected wallet routes the gateway() resolution AND every
+// publicDecrypt poll through the WALLET's own RPC (rate-limited/flaky for many
+// users; the exact "Failed to read contract … (method: gateway)" seen in the
+// field). encryptInput and publicDecrypt never sign (verified in the SDK), so
+// for those we hand the SDK a client with the user's ADDRESS (owner binding)
+// but chain + transport pinned to the app's fallback RPC pool. Only private
+// `decrypt` (signTypedData) still needs the real wallet — and both decrypt
+// call sites are best-effort.
+// ---------------------------------------------------------------------------
+const CHAIN_DEF = { [sepolia.id]: sepolia, [arbitrumSepolia.id]: arbitrumSepolia };
+const noxClientCache = new Map();
+function noxClientFor(chainId, address) {
+  const key = `${chainId}:${String(address).toLowerCase()}`;
+  if (!noxClientCache.has(key)) {
+    const account = toAccount({
+      address,
+      async signMessage() { throw new Error("read-only Nox client cannot sign"); },
+      async signTransaction() { throw new Error("read-only Nox client cannot sign"); },
+      async signTypedData() { throw new Error("read-only Nox client cannot sign"); },
+    });
+    const client = createWalletClient({
+      account,
+      chain: CHAIN_DEF[chainId],
+      transport: fallback(RPC_URLS[chainId].map((u) => http(u))),
+    });
+    // Cache the promise; evict on failure so a transient error doesn't poison
+    // every later call with the same rejected promise.
+    const p = createViemHandleClient(client).catch((e) => {
+      noxClientCache.delete(key);
+      throw e;
+    });
+    noxClientCache.set(key, p);
+  }
+  return noxClientCache.get(key);
+}
+
+// Encrypt with a bounded retry: the remaining failure mode after pinning RPCs
+// is a transient Handle Gateway hiccup (observed 401/403 propagation blips).
+async function encryptWithRetry(hc, value, app, tries = 3) {
+  for (let i = 0; ; i++) {
+    try {
+      return await hc.encryptInput(value, "uint256", app);
+    } catch (e) {
+      if (i >= tries - 1) throw e;
+      await sleep(1200 * (i + 1));
+    }
   }
 }
 
@@ -417,13 +473,15 @@ export async function runConfidentialBridge({
   try {
     // Encrypt all destination claims off-chain first (no signature), then
     // pre-register them in ONE batched confirmation (or sequentially if the
-    // wallet can't batch).
+    // wallet can't batch). Encryption uses the RPC-pinned Nox client — the
+    // wallet is only needed for the on-chain writes below.
     const wallet = await getWalletClient(DST);
-    const handleClient = await createViemHandleClient(wallet);
+    const addr = wallet.account?.address ?? wallet.account;
+    const handleClient = await noxClientFor(DST, addr);
     const calls = [];
     for (let i = 0; i < transfers.length; i++) {
       step(`prereg-${i}`, "active", `pre-register transfer ${i + 1}/3 → ${short(transfers[i].recipient)} · encrypting locally`);
-      const enc = await handleClient.encryptInput(transfers[i].amount, "uint256", DISTRIBUTOR_ADDRESS);
+      const enc = await encryptWithRetry(handleClient, transfers[i].amount, DISTRIBUTOR_ADDRESS);
       dstHandles[i] = enc.handle;
       calls.push({
         address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "preRegister",
@@ -506,10 +564,11 @@ export async function runConfidentialBridge({
     if (sourceCalls.length === 0) step("fund", "done", "already funded — no funding transactions needed");
 
     // --- deposits: encrypt off-chain, reuse the exact dstHandles[i] ---
-    const depHc = await createViemHandleClient(wallet);
+    // RPC-pinned Nox client: encryption must never depend on the wallet's RPC.
+    const depHc = await noxClientFor(SRC, me);
     for (let i = 0; i < transfers.length; i++) {
       step(`deposit-${i}`, "active", `deposit transfer ${i + 1}/3 → ${short(transfers[i].recipient)} · encrypting locally`);
-      const enc = await depHc.encryptInput(transfers[i].amount, "uint256", BATCHER_ADDRESS);
+      const enc = await encryptWithRetry(depHc, transfers[i].amount, BATCHER_ADDRESS);
       sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "deposit", args: [transfers[i].recipient, enc.handle, enc.handleProof, dstHandles[i]], key: `deposit-${i}`, label: `deposit → ${short(transfers[i].recipient)}` });
     }
 
@@ -539,7 +598,8 @@ export async function runConfidentialBridge({
   step("settle", "active", "reading epoch handles + revealing aggregate");
   try {
     const wallet = await getWalletClient(SRC);
-    const handleClient = await createViemHandleClient(wallet);
+    // publicDecrypt polls do an on-chain read per attempt — RPC-pinned client.
+    const handleClient = await noxClientFor(SRC, me);
 
     const [encSum, unwrapReqId] = await publicClientSource.readContract({
       address: BATCHER_ADDRESS,
@@ -618,7 +678,8 @@ export async function runConfidentialBridge({
   step("finalize", "active", "revealing integrity result (KMS)…");
   try {
     const wallet = await getWalletClient(DST);
-    const handleClient = await createViemHandleClient(wallet);
+    // publicDecrypt polls do an on-chain read per attempt — RPC-pinned client.
+    const handleClient = await noxClientFor(DST, me);
 
     const checkNum = await publicClientDest.readContract({
       address: DISTRIBUTOR_ADDRESS,
