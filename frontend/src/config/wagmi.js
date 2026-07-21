@@ -18,16 +18,18 @@ import { injected } from "wagmi/connectors";
 // is why the widget also surfaces guidance to switch a rate-limited wallet RPC.
 // RPC_URLS is exported so bridge.js can pin the Nox SDK's on-chain reads to the
 // same resilient pool (never the wallet's RPC).
+// Only browser-CORS-safe, non-rate-limited public endpoints, most-reliable
+// first (verified: publicnode + drpc answer the CORS preflight and eth_chainId;
+// 1rpc.io rate-limits and rpc.sepolia.org is dead — both dropped so viem's
+// fallback never wastes a hop on them).
 export const RPC_URLS = {
   [sepolia.id]: [
     "https://ethereum-sepolia-rpc.publicnode.com",
     "https://sepolia.drpc.org",
-    "https://1rpc.io/sepolia",
-    "https://rpc.sepolia.org",
   ],
   [arbitrumSepolia.id]: [
-    "https://sepolia-rollup.arbitrum.io/rpc",
     "https://arbitrum-sepolia-rpc.publicnode.com",
+    "https://sepolia-rollup.arbitrum.io/rpc",
     "https://arbitrum-sepolia.drpc.org",
   ],
 };

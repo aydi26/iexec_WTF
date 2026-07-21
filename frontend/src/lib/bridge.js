@@ -134,23 +134,50 @@ async function fetchAttestation(srcDomain, burnTxHash, onWait, timeoutMs = 300_0
 // ---------------------------------------------------------------------------
 const CHAIN_DEF = { [sepolia.id]: sepolia, [arbitrumSepolia.id]: arbitrumSepolia };
 const noxClientCache = new Map();
-function noxClientFor(chainId, address) {
+
+// Build the SDK handle client, retrying client creation (which performs the
+// on-chain gateway() read that failed in the field) a few times. `walletClient`
+// is the LAST-RESORT transport: if the RPC-pinned read keeps failing, fall back
+// to the real wallet's client — the path that worked before RPC-pinning — so we
+// are strictly more robust than either transport alone.
+async function buildNoxClient(chainId, address, walletClient) {
+  const account = toAccount({
+    address,
+    async signMessage() { throw new Error("read-only Nox client cannot sign"); },
+    async signTransaction() { throw new Error("read-only Nox client cannot sign"); },
+    async signTypedData() { throw new Error("read-only Nox client cannot sign"); },
+  });
+  const pinned = createWalletClient({
+    account,
+    chain: CHAIN_DEF[chainId],
+    transport: fallback(RPC_URLS[chainId].map((u) => http(u))),
+  });
+  let lastErr;
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await createViemHandleClient(pinned);
+    } catch (e) {
+      lastErr = e;
+      await sleep(1000 * (i + 1));
+    }
+  }
+  // Pinned RPCs failed 3× — try the wallet's own client as a fallback.
+  if (walletClient) {
+    try {
+      return await createViemHandleClient(walletClient);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
+function noxClientFor(chainId, address, walletClient) {
   const key = `${chainId}:${String(address).toLowerCase()}`;
   if (!noxClientCache.has(key)) {
-    const account = toAccount({
-      address,
-      async signMessage() { throw new Error("read-only Nox client cannot sign"); },
-      async signTransaction() { throw new Error("read-only Nox client cannot sign"); },
-      async signTypedData() { throw new Error("read-only Nox client cannot sign"); },
-    });
-    const client = createWalletClient({
-      account,
-      chain: CHAIN_DEF[chainId],
-      transport: fallback(RPC_URLS[chainId].map((u) => http(u))),
-    });
     // Cache the promise; evict on failure so a transient error doesn't poison
     // every later call with the same rejected promise.
-    const p = createViemHandleClient(client).catch((e) => {
+    const p = buildNoxClient(chainId, address, walletClient).catch((e) => {
       noxClientCache.delete(key);
       throw e;
     });
@@ -502,7 +529,7 @@ export async function runConfidentialBridge({
     // wallet is only needed for the on-chain writes below.
     const wallet = await getWalletClient(DST);
     const addr = wallet.account?.address ?? wallet.account;
-    const handleClient = await noxClientFor(DST, addr);
+    const handleClient = await noxClientFor(DST, addr, wallet);
     const calls = [];
     for (let i = 0; i < effective.length; i++) {
       step(`prereg-${i}`, "active", `pre-register transfer ${i + 1}/${effective.length} → ${short(effective[i].recipient)} · encrypting locally`);
@@ -590,7 +617,7 @@ export async function runConfidentialBridge({
 
     // --- deposits: encrypt off-chain, reuse the exact dstHandles[i] ---
     // RPC-pinned Nox client: encryption must never depend on the wallet's RPC.
-    const depHc = await noxClientFor(SRC, me);
+    const depHc = await noxClientFor(SRC, me, wallet);
     for (let i = 0; i < effective.length; i++) {
       step(`deposit-${i}`, "active", `deposit transfer ${i + 1}/${effective.length} → ${short(effective[i].recipient)} · encrypting locally`);
       const enc = await encryptWithRetry(depHc, effective[i].amount, BATCHER_ADDRESS);
@@ -646,7 +673,7 @@ export async function runConfidentialBridge({
   try {
     const wallet = await getWalletClient(SRC);
     // publicDecrypt polls do an on-chain read per attempt — RPC-pinned client.
-    const handleClient = await noxClientFor(SRC, me);
+    const handleClient = await noxClientFor(SRC, me, wallet);
 
     const [encSum, unwrapReqId] = await publicClientSource.readContract({
       address: BATCHER_ADDRESS,
@@ -726,7 +753,7 @@ export async function runConfidentialBridge({
   try {
     const wallet = await getWalletClient(DST);
     // publicDecrypt polls do an on-chain read per attempt — RPC-pinned client.
-    const handleClient = await noxClientFor(DST, me);
+    const handleClient = await noxClientFor(DST, me, wallet);
 
     const checkNum = await publicClientDest.readContract({
       address: DISTRIBUTOR_ADDRESS,
