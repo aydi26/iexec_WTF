@@ -64,6 +64,10 @@ summed over — injecting, reordering, or withdrawing claims — which could bri
   or spend it. Injected, reordered, or withdrawn claims still cannot brick an epoch.
   (`requestClaimReveal` keeps its `msg.sender == recipient` guard: only a recipient may reveal
   their **own** amount in fallback.)
+- The **batch entry points** added later (`preRegisterMany` on the Distributor, `depositMany`
+  on the Batcher) are loops over the same per-item logic: each item carries its **own
+  owner-bound Nox input proof**, so the F-1/F-2 anti-squatting guarantees hold **per item**.
+  Batching reduces the transaction count; it does not change the trust model.
 
 ### F-5 — Immutable peer wiring — **High**
 
@@ -147,7 +151,22 @@ malicious gateway signer** would compromise amount privacy. Noxus does not and c
 mitigate a break in the underlying confidential-compute layer; it inherits that layer's
 assurances and their current maturity.
 
-### L-5 — Testnet-only and unaudited beyond this review — **Informational**
+### L-5 — Centralized operator keeper — **Low/Medium (operational)**
+
+The live app runs a **serverless keeper** (`/api/keeper` on the deployed app, address
+`0x50ea6bF3D5e8B5F6A7b9Cc1842B09EfE01851abC`) that contributes the two batch fillers ("fill")
+and drives the permissionless back half of every epoch (close → settle + CCTP burn → Iris
+attestation → relay + integrity check → finalize). It is a **liveness helper, not a trust
+point**: every step it performs is gated by **epoch state + the Circle attestation + the
+on-chain KMS proof — never by caller identity** — so the keeper key is gas-only and **cannot
+steal funds or alter amounts**. Worst case if it goes down or runs dry: the epoch simply does
+not advance; any user can self-serve the same permissionless steps (the frontend falls back to
+client-side signing, and self-filler mode replaces the operator fillers), and `forceFallback`
+rescues a stuck epoch after the timeout. The **centralized operator** (fillers, fee buffer,
+keeper gas) is an accepted testnet limitation; production would want a decentralized keeper
+set or user-funded economics.
+
+### L-6 — Testnet-only and unaudited beyond this review — **Informational**
 
 The code is deployed only to Ethereum Sepolia and Arbitrum Sepolia, uses testnet USDC, and
 has **not undergone a professional security audit**. The independent review referenced here

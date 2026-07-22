@@ -3,7 +3,7 @@
 > **Confidential cross-chain USDC settlement over unmodified Circle CCTP V2, with iExec Nox as the privacy layer.**
 > Individual deposit amounts never touch the blockchain; one public aggregate bridges; an on-chain, TEE-verified integrity check gates confidential distribution — and makes cheating detectable, unprofitable, and self-exposing.
 
-This is a timed shot list for the presenter. Target runtime **~3:45**. Follow the **actual built flow** (README §1 + §13, PLAN §3): depositors **pre-register their destination claim on Arbitrum** (option B, owner-binding), and the **keeper/frontend drives** `close → settle → relay → check → finalize`.
+This is a timed shot list for the presenter. Target runtime **~3:45**. Follow the **actual built flow** (README §1 + §13, PLAN §3): depositors **pre-register their destination claim on Arbitrum** (option B, owner-binding; the widget batches this via `preRegisterMany` + `depositMany` — ~2 signatures on a recurring bridge), and the **serverless keeper drives** `fill → close → settle → relay → check → finalize` server-side (operator fillers land within ~5 s of the bridge starting).
 
 **Verified live (2026-07-12):** honest 3-depositor epoch settles ETH Sepolia → distributes Arb Sepolia with `check == 1`, zero mock data; recipient decrypts their own balance. KMS reveal RTT is fast (~2–7 s; ETH-Sep block confirmation, not KMS, is the slow part) — this is a **GO-LIVE** recording.
 
@@ -26,7 +26,7 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 - [ ] **All contracts explorer-verified** on Etherscan (ETH Sepolia) and Arbiscan (Arb Sepolia) — judges click through, so green checkmarks must be visible.
 - [ ] **Tabs pre-opened** (see "Tabs to have staged" below) and logged in / wallet connected.
 - [ ] **A real, unrelated CCTP `depositForBurn` tx** located on Etherscan for the opening hook (any recent public burn — e.g. from a treasury/exchange), so amounts are plainly visible in it.
-- [ ] The bridge widget open on the live run (its Track tab shows every phase with tx links); CLI scripts staged as the rehearsed instant fallback if a UI step stalls on camera.
+- [ ] The bridge widget open on the live app (**https://iexecwtf.vercel.app** — its Track tab shows every phase with tx links); confirm the serverless keeper answers (`GET /api/keeper` returns `ok:true`) so the fill + back half run server-side; CLI scripts staged as the rehearsed instant fallback if a UI step stalls on camera.
 
 ## Tabs to have staged (left-to-right in the browser)
 1. Etherscan — a real public CCTP burn (opening hook)
@@ -37,7 +37,7 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 6. Noxus frontend — the widget's **Track tab / final summary** (bridged amount shown only to the user)
 7. Terminal — **auditor** demo via script (`grantAuditor` + auditor decrypts one amount)
 
-> **Live addresses (current — verify against `deployments/*.json` before shooting):** cUSDC ETH `0x47d150…41C` / Arb `0xD74A1F…0209`; ETH→Arb Batcher `0x82688B…934A` + Distributor `0x1a87F7…E666`; Arb→ETH Batcher `0x0c0695…f000` + Distributor `0x3B9d67…80eC`.
+> **Live addresses (current — verify against `deployments/*.json` before shooting):** cUSDC ETH `0x47d150…e41C` / Arb `0xD74A1F…0209`; ETH→Arb Batcher `0x4eDbe8…7E77` + Distributor `0xc5097a…83B2`; Arb→ETH Batcher `0xAFF377…482a` + Distributor `0xbd259A…A539`.
 
 ---
 
@@ -60,7 +60,7 @@ This is a timed shot list for the presenter. Target runtime **~3:45**. Follow th
 - **Tab:** Etherscan (3 deposits, side-by-side).
 
 ### 1:15 — 1:35 · Close → settle → the ONE public number
-- **On screen:** the widget's Track tab: the **Close** and **Settle + CCTP burn** phases complete on their own (the widget drives them). Show the settle detail resolving to a single plaintext `A`, then the `EpochSettled` / CCTP burn tx on Etherscan (Tab 3) showing `A` as the only visible amount.
+- **On screen:** the widget's Track tab: the **Close** and **Settle + CCTP burn** phases complete on their own (the serverless keeper drives them server-side). Show the settle detail resolving to a single plaintext `A`, then the `EpochSettled` / CCTP burn tx on Etherscan (Tab 3) showing `A` as the only visible amount.
 - **Presenter:** "The keeper closes the epoch and settles. The **only** number that ever becomes public is the aggregate — one figure, unavoidable, because that's the CCTP burn amount. No individual amount, ever."
 - **Editing note:** the settle reveal is a two-tx KMS round-trip. It's fast (~2–7 s) but if the wait is visible on camera, **cut on the click and resume on the green proof indicator** — do not sit on dead air.
 - **Tab:** Widget (Track tab) → Etherscan (`EpochSettled` / burn).

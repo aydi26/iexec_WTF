@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import "./ResourcesPage.css";
 
@@ -22,7 +22,7 @@ const docsTree = [
     category: "Protocol",
     content: {
       title: "Getting Started",
-      body: "Noxus is a confidential cross-chain USDC settlement layer over Circle CCTP V2, using iExec Nox (encrypted ERC-7984 handles + TEE) as the privacy layer. The app is a single bridge widget: you enter an amount and a destination — your own address or ANY other address — and everything (wrapping USDC into confidential cUSDC, batching, the CCTP bridge, the TEE integrity check and the confidential distribution) runs in the background, driven entirely from your browser. The bridge is bidirectional: the swap arrow flips the route between Ethereum Sepolia and Arbitrum Sepolia. Individual amounts never touch the blockchain; only the batch aggregate is ever public. Positioning: confidentiality, not anonymity — participants are visible, amounts are not.",
+      body: "Noxus is a confidential cross-chain USDC settlement layer over Circle CCTP V2, using iExec Nox (encrypted ERC-7984 handles + TEE) as the privacy layer. The app is a single bridge widget: you enter an amount and a destination — your own address or ANY other address — and everything (wrapping USDC into confidential cUSDC, batching, the CCTP bridge, the TEE integrity check and the confidential distribution) runs in the background: you sign only your own deposit steps, the operator's serverless keeper drives the rest, and your browser can run every step itself if the keeper is ever unreachable. The bridge is bidirectional: the swap arrow flips the route between Ethereum Sepolia and Arbitrum Sepolia. Individual amounts never touch the blockchain; only the batch aggregate is ever public. Positioning: confidentiality, not anonymity — participants are visible, amounts are not.",
       subsections: [
         {
           title: "Prerequisites",
@@ -31,26 +31,27 @@ const docsTree = [
             "Testnet USDC on the source chain (Circle faucet) — the widget wraps it into cUSDC for you",
             "A little ETH for gas on BOTH Ethereum Sepolia and Arbitrum Sepolia",
             "Per-bridge cap on testnet: max 1 USDC per transfer",
-            "During the bridge your wallet switches networks a few times — approve each prompt",
+            "Network switching is automatic — the app moves your wallet to the right chain when needed; just approve the switch prompts",
           ],
         },
         {
           title: "The k=3 batch (why a little extra)",
           items: [
             "Privacy needs a crowd: a batch must have at least 3 deposits to hide any single amount",
-            "The operator's keeper contributes the 2 filler transfers (0.5 cUSD each, from its own funds, cycling back to the operator) within seconds of you starting a bridge — so you only sign YOUR OWN transfer",
-            "If the keeper is offline or out of filler liquidity, the app falls back to you providing the 2 fillers yourself — they cross with the batch and land back in your wallet on the destination chain",
+            "The operator's keeper contributes the 2 filler transfers (0.5 cUSD each, from its own pre-wrapped liquidity, cycling back to the operator on the destination) within ~5 seconds of you starting a bridge — so you only sign YOUR OWN transfer",
+            "If the keeper is offline or out of filler liquidity, the app falls back to self-filler mode: you provide all 3 transfers yourself — the 2 fillers cross with the batch and land back in your own wallet on the destination chain (the proven original flow)",
             "You only enter your amount + destination — the batch mechanics are handled in the background",
           ],
         },
         {
           title: "Fewer signatures",
           items: [
-            "A serverless keeper contributes the 2 batch fillers AND runs the 5 permissionless steps for you — close, settle + CCTP burn, relay, integrity check, finalize — so on ANY wallet (incl. a plain Rabby / MetaMask EOA) a recurring bridge is ~2-3 confirmations: your own pre-registration and deposit, plus funding the first time",
-            "Safe by design: those steps are gated by epoch state, the Circle attestation and the on-chain KMS proof — never by caller identity — so the keeper can never steal funds or alter amounts; the worst it can do is not advance an epoch (you can still self-serve)",
+            "A recurring bridge is ~2 signatures: one preRegisterMany tx on the destination (all claims batched) and one depositMany tx on the source (all deposits batched) — the contracts' one-tx batch entry points collapse what used to be 6 data transactions into 2",
+            "The serverless keeper contributes the 2 batch fillers AND runs the 5 permissionless back-half steps server-side — close, settle + CCTP burn, Iris attestation, relay + integrity check, finalize — so this works on ANY wallet, incl. a plain MetaMask / Rabby EOA",
+            "Your first bridge adds one-time funding (max USDC approval, wrap with headroom, setOperator) for ~5 signatures total; the headroom means later bridges skip funding entirely",
+            "Safe by design: the keeper's steps are gated by epoch state, the Circle attestation and the on-chain KMS proof — never by caller identity — so it can never steal funds or alter amounts; the worst it can do is not advance an epoch (you can still self-serve)",
             "On wallets that support EIP-5792 atomic batching (smart accounts), the steps you DO sign collapse further — a whole phase becomes one confirmation",
-            "If the keeper is ever unreachable, the app falls back to you signing those steps client-side (the proven path) — never a broken bridge",
-            "The USDC approval is one-time (max allowance to the project's own Sourcify-verified wrapper); the first wrap includes headroom for the next bridge, so later bridges skip funding entirely",
+            "If the keeper is ever unreachable, the app falls back to you signing everything client-side (the proven path, ~7 confirmations thanks to the same batch entry points) — the bridge is never blocked",
           ],
         },
       ],
@@ -74,7 +75,7 @@ const docsTree = [
                 "one-time max USDC approval to the wrapper, then wrap into cUSDC (with headroom so later bridges skip this)",
                 "setOperator authorizes the Batcher to pull your encrypted balance",
                 "Your amount is encrypted in the browser via the Nox handle SDK",
-                "deposit() adds your encrypted amount to the epoch's encrypted sum",
+                "depositMany() adds your encrypted amount(s) to the epoch's encrypted sum in a single transaction",
                 "The contract itself never learns your individual amount",
               ],
             },
@@ -111,7 +112,7 @@ const docsTree = [
             {
               title: "The check",
               items: [
-                "The sender pre-registers each recipient's confidential destination claim on the destination chain — for itself or for a third-party address",
+                "The sender pre-registers every recipient's confidential destination claim in one preRegisterMany tx on the destination chain — for itself or for a third-party address",
                 "Anti-squatting comes from the Nox input proof (owner-bound), not caller identity; the recipient alone can reveal or spend its claim",
                 "relayReceive mints A and binds it to the source-committed claim set",
                 "checkEpoch computes, in the TEE, whether Sum(claims) == A and reveals only a boolean",
@@ -165,12 +166,32 @@ const docsTree = [
     category: "Technical",
     content: {
       title: "Contracts",
-      body: "Three authored contracts, plus the unmodified CCTP V2 and NoxCompute deployments. Every function is permissionless (guarded by state + on-chain proof verification, not caller identity); the keeper is just whoever bothers to advance the epoch.",
+      body: "Three authored contracts, plus the unmodified CCTP V2 and NoxCompute deployments. Every function is permissionless (guarded by state + on-chain proof verification, not caller identity); the keeper is just whoever bothers to advance the epoch. The one-tx batch entry points depositMany / preRegisterMany collapse the user's data transactions from 6 to 2.",
       table: [
-        { label: "NoxusBatcher", value: "deposit / withdrawDeposit / closeEpoch / settleEpoch / relayRefund / grantAuditor" },
-        { label: "NoxusDistributor", value: "preRegister / relayReceive / checkEpoch / finalizeEpoch / fallback + refund" },
+        { label: "NoxusBatcher", value: "deposit / depositMany / withdrawDeposit / closeEpoch / settleEpoch / relayRefund / grantAuditor" },
+        { label: "NoxusDistributor", value: "preRegister / preRegisterMany / relayReceive / checkEpoch / finalizeEpoch / fallback + refund" },
         { label: "NoxusCUSDC", value: "Confidential USDC wrapper: wrap / unwrap / confidentialTransfer" },
         { label: "Integrity", value: "3 reveal sites only; no plaintext amount in events; no branching on encrypted data" },
+      ],
+    },
+  },
+  {
+    id: "keeper",
+    label: "Keeper",
+    category: "Technical",
+    content: {
+      title: "Keeper",
+      body: "A serverless keeper (the /api/keeper endpoint on the app's own domain) runs the operator side of every bridge: it contributes the 2 batch fillers from its own pre-wrapped cUSDC within ~5 seconds of a bridge starting (they cycle back to the operator on the destination), then drives the whole permissionless back half server-side — close, settle + CCTP burn, Iris attestation, relay + integrity check, finalize.",
+      subsections: [
+        {
+          title: "Why it cannot steal",
+          items: [
+            "Every step it calls is permissionless and gated by epoch state, the Circle attestation and the on-chain Nox KMS proof — never by caller identity; the keeper has no special rights on any contract",
+            "It cannot redirect funds or alter amounts: recipients and encrypted claims are committed by YOUR signed pre-registration and deposit before the keeper advances anything",
+            "Its dedicated key holds only gas (plus the filler cUSDC liquidity, which returns to the operator each epoch)",
+            "Worst case: the keeper is down and the epoch stalls — the app falls back to client-side signing and self-filler mode, so you can always finish the bridge (or withdraw an open deposit) yourself",
+          ],
+        },
       ],
     },
   },
@@ -208,18 +229,19 @@ const docsTree = [
     category: "Reference",
     content: {
       title: "Live Deployments (Sourcify-verified, bidirectional)",
-      body: "Every chain hosts both roles, so the bridge runs ETH->Arb and Arb->ETH. All six contracts are Sourcify exact_match.",
+      body: "Every chain hosts both roles, so the bridge runs ETH->Arb and Arb->ETH. All six Noxus contracts are Sourcify exact_match; each address below links to its explorer page.",
       table: [
         { label: "Ethereum Sepolia", value: "Chain ID 11155111 · CCTP domain 0" },
-        { label: "NoxusCUSDC (ETH)", value: "0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C" },
-        { label: "NoxusBatcher (ETH, source of ETH->Arb)", value: "0x82688B8890Aab5744135cB26C3292eb821A4934A" },
-        { label: "NoxusDistributor (ETH, dest of Arb->ETH)", value: "0x3B9d67AD5B02a50d8B0db0890FCF2060BdcC80eC" },
+        { label: "NoxusCUSDC (ETH)", value: "0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C", href: "https://sepolia.etherscan.io/address/0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C" },
+        { label: "NoxusBatcher (ETH, source of ETH->Arb)", value: "0x4eDbe88f04A547c20a3dfD3A7c7452479f3c7E77", href: "https://sepolia.etherscan.io/address/0x4eDbe88f04A547c20a3dfD3A7c7452479f3c7E77" },
+        { label: "NoxusDistributor (ETH, dest of Arb->ETH)", value: "0xbd259Aa982aBE9E8f3f5CD28d783AB452264A539", href: "https://sepolia.etherscan.io/address/0xbd259Aa982aBE9E8f3f5CD28d783AB452264A539" },
         { label: "Arbitrum Sepolia", value: "Chain ID 421614 · CCTP domain 3" },
-        { label: "NoxusCUSDC (Arb)", value: "0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209" },
-        { label: "NoxusBatcher (Arb, source of Arb->ETH)", value: "0x0c0695023920e4e8F89976773998fC77E7b2f000" },
-        { label: "NoxusDistributor (Arb, dest of ETH->Arb)", value: "0x1a87F73D57BeF323376860a7B3f11f7C18AcE666" },
-        { label: "CCTP TokenMessengerV2", value: "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA (both chains)" },
-        { label: "CCTP MessageTransmitterV2", value: "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275 (both chains)" },
+        { label: "NoxusCUSDC (Arb)", value: "0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209", href: "https://sepolia.arbiscan.io/address/0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209" },
+        { label: "NoxusBatcher (Arb, source of Arb->ETH)", value: "0xAFF3778e41Df36c4895154196f7880969A1B482a", href: "https://sepolia.arbiscan.io/address/0xAFF3778e41Df36c4895154196f7880969A1B482a" },
+        { label: "NoxusDistributor (Arb, dest of ETH->Arb)", value: "0xc5097a40C5Fd58E2Db5cb7989C9cBD85251583B2", href: "https://sepolia.arbiscan.io/address/0xc5097a40C5Fd58E2Db5cb7989C9cBD85251583B2" },
+        { label: "CCTP TokenMessengerV2", value: "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA (both chains)", href: "https://sepolia.etherscan.io/address/0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA" },
+        { label: "CCTP MessageTransmitterV2", value: "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275 (both chains)", href: "https://sepolia.etherscan.io/address/0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275" },
+        { label: "Sourcify verification", value: "Look up any of the six addresses — all exact_match", href: "https://sourcify.dev/#/lookup" },
       ],
     },
   },
@@ -264,7 +286,8 @@ const docsTree = [
             "USDC uses 6 decimals — 1 USDC = 1,000,000 raw units; testnet cap: max 1 USDC per bridge",
             "closeEpoch requires at least minDepositors (default 3) to preserve k-anonymity",
             "The bridge is bidirectional — use the swap arrow to flip ETH -> Arb into Arb -> ETH",
-            "The ENTIRE bridge runs in your browser from the single widget — deposits, batching, CCTP bridge, TEE check and distribution; your wallet switches networks along the way",
+            "The whole bridge runs from the single widget: you sign ~2 transactions (plus one-time funding on your first bridge); the serverless keeper runs the back half — close, settle + CCTP burn, attestation, relay + check, finalize — server-side, with a full client-side fallback",
+            "Network switching is automatic — the app moves your wallet to the right chain at each phase",
             "The Track tab lists every bridge (both directions) that was started but is not complete yet, and the exact phase it is stuck at — refresh it any time",
             "The header Faucet button links to the Circle USDC faucet and both gas faucets",
             "CCTP Fast Transfer settles in ~8-20 seconds; the reveal round-trip via the Nox KMS is a few seconds",
@@ -278,23 +301,21 @@ const docsTree = [
 
 /* ===== SIDEBAR NAV ITEM ===== */
 function SidebarItem({ item, activeId, onSelect, depth = 0 }) {
-  const [open, setOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(null);
   const hasChildren = item.children && item.children.length > 0;
   const isActive = item.id === activeId;
   const hasActiveChild = hasChildren && item.children.some(
     (c) => c.id === activeId || (c.children && c.children.some((cc) => cc.id === activeId))
   );
-
-  useEffect(() => {
-    if (hasActiveChild) setOpen(true);
-  }, [hasActiveChild]);
+  // Open when the user toggled it open, or (untouched) when a child is active.
+  const open = userOpen !== null ? userOpen : hasActiveChild;
 
   if (hasChildren) {
     return (
       <li>
         <button
           className={`docs-sidebar-btn ${hasActiveChild ? "has-active" : ""}`}
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => setUserOpen(!open)}
           style={{ paddingLeft: `${12 + depth * 16}px` }}
         >
           <span>{item.label}</span>
@@ -361,7 +382,18 @@ function DocContent({ content }) {
           {content.table.map((row, i) => (
             <div key={i} className="docs-table-row">
               <span className="docs-table-label">{row.label}</span>
-              <span className="docs-table-value">{row.value}</span>
+              {row.href ? (
+                <a
+                  className="docs-table-value"
+                  href={row.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {row.value}
+                </a>
+              ) : (
+                <span className="docs-table-value">{row.value}</span>
+              )}
             </div>
           ))}
         </div>

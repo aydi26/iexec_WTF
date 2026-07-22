@@ -395,12 +395,6 @@
 .bridge-recipient-input::placeholder { color: #3a3a3c; }
 .bridge-recipient-input.bad { color: #ff6b6b; }
 
-.bridge-foot-note {
-  margin-top: 14px; display: flex; gap: 8px; align-items: flex-start;
-  font-size: 12px; line-height: 1.5; color: #8a8a8e;
-}
-.bridge-foot-note svg { flex-shrink: 0; margin-top: 2px; color: var(--nx-accent); }
-
 .bf-track-empty { padding: 28px 8px; text-align: center; color: #8a8a8e; font-size: 13px; }
 .bf-linkbtn {
   background: none; border: none; color: var(--nx-accent); font: inherit; font-weight: 600;

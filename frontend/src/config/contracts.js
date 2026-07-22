@@ -43,7 +43,7 @@ const pick = (obj, ...keys) => {
 
 // Both chains now host BOTH a Batcher and a Distributor, so the bridge runs in
 // either direction (ETH->Arb and Arb->ETH).
-export const ADDRESSES = {
+const ADDRESSES = {
   [CHAIN_IDS.SOURCE]: {
     NoxusBatcher: pick(sepoliaDeployment, "NoxusBatcher"),
     NoxusDistributor: pick(sepoliaDeployment, "NoxusDistributor"),
@@ -66,7 +66,6 @@ export const FAR_FUTURE_EXPIRY = 281474976710655n; // 2^48 - 1
 // ---------------------------------------------------------------------------
 export const BATCHER_ABI = NoxusBatcherAbi;
 export const CUSDC_ABI = NoxusCUSDCAbi;
-// TODO(contracts): placeholder — see import note above.
 export const DISTRIBUTOR_ABI = NoxusDistributorAbi;
 
 // Minimal ERC-20 ABI (approve/allowance/balanceOf on the underlying USDC).
@@ -110,7 +109,7 @@ export const ERC20_ABI = [
 // ---------------------------------------------------------------------------
 // Explorers
 // ---------------------------------------------------------------------------
-export const EXPLORERS = {
+const EXPLORERS = {
   [CHAIN_IDS.SOURCE]: "https://sepolia.etherscan.io",
   [CHAIN_IDS.DEST]: "https://sepolia.arbiscan.io",
 };
@@ -122,19 +121,19 @@ export const txUrl = (chainId, hash) =>
 // Multi-chain / bidirectional routing
 // ---------------------------------------------------------------------------
 // Underlying USDC + CCTP domain + display metadata per chain.
-export const USDC_BY_CHAIN = {
+const USDC_BY_CHAIN = {
   [CHAIN_IDS.SOURCE]: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // ETH Sepolia
   [CHAIN_IDS.DEST]: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Arb Sepolia
 };
-export const CCTP_DOMAIN = {
+const CCTP_DOMAIN = {
   [CHAIN_IDS.SOURCE]: 0, // Ethereum
   [CHAIN_IDS.DEST]: 3, // Arbitrum
 };
-export const CHAIN_LABEL = {
+const CHAIN_LABEL = {
   [CHAIN_IDS.SOURCE]: "Ethereum Sepolia",
   [CHAIN_IDS.DEST]: "Arbitrum Sepolia",
 };
-export const CHAIN_SHORT = {
+const CHAIN_SHORT = {
   [CHAIN_IDS.SOURCE]: "eth",
   [CHAIN_IDS.DEST]: "arb",
 };

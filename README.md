@@ -6,6 +6,8 @@
 
 **Individual amounts never touch the blockchain.** Encrypted deposits are batched on Ethereum Sepolia, one public aggregate bridges via [Circle CCTP V2](https://developers.circle.com/cctp), and distribution on Arbitrum Sepolia is confidential — gated by an on-chain, TEE-verified integrity check that makes cheating detectable and self-punishing.
 
+**Live app: [iexecwtf.vercel.app](https://iexecwtf.vercel.app)**
+
 [![Status](https://img.shields.io/badge/E2E-live%20on%20testnet-brightgreen)](#whats-verified-live)
 [![Contracts](https://img.shields.io/badge/contracts-Sourcify%20verified-blue)](#live-deployments)
 [![CCTP](https://img.shields.io/badge/Circle%20CCTP%20V2-unmodified-2775ca)](https://developers.circle.com/cctp)
@@ -93,22 +95,24 @@ The bridge is **bidirectional** — every chain hosts both a `NoxusBatcher` and 
 |---|---|---|---|
 | `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0x47d150…e41C`](https://sepolia.etherscan.io/address/0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C) | confidential USDC |
 | `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0xD74A1F…0209`](https://sepolia.arbiscan.io/address/0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209) | confidential USDC |
-| `NoxusBatcher` | ETH Sepolia | [`0x82688B…934A`](https://sepolia.etherscan.io/address/0x82688B8890Aab5744135cB26C3292eb821A4934A) | source · ETH→Arb |
-| `NoxusDistributor` | Arb Sepolia | [`0x410195…0ECFA`](https://sepolia.arbiscan.io/address/0x1a87F73D57BeF323376860a7B3f11f7C18AcE666) | dest · ETH→Arb |
-| `NoxusBatcher` | Arb Sepolia | [`0x0c0695…f000`](https://sepolia.arbiscan.io/address/0x0c0695023920e4e8F89976773998fC77E7b2f000) | source · Arb→ETH |
-| `NoxusDistributor` | ETH Sepolia | [`0x3B9d67…80eC`](https://sepolia.etherscan.io/address/0x3B9d67AD5B02a50d8B0db0890FCF2060BdcC80eC) | dest · Arb→ETH |
+| `NoxusBatcher` | ETH Sepolia | [`0x4eDbe8…7E77`](https://sepolia.etherscan.io/address/0x4eDbe88f04A547c20a3dfD3A7c7452479f3c7E77) | source · ETH→Arb |
+| `NoxusDistributor` | Arb Sepolia | [`0xc5097a…83B2`](https://sepolia.arbiscan.io/address/0xc5097a40C5Fd58E2Db5cb7989C9cBD85251583B2) | dest · ETH→Arb |
+| `NoxusBatcher` | Arb Sepolia | [`0xAFF377…482a`](https://sepolia.arbiscan.io/address/0xAFF3778e41Df36c4895154196f7880969A1B482a) | source · Arb→ETH |
+| `NoxusDistributor` | ETH Sepolia | [`0xbd259A…A539`](https://sepolia.etherscan.io/address/0xbd259Aa982aBE9E8f3f5CD28d783AB452264A539) | dest · Arb→ETH |
 
 > Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3. The contracts are direction-agnostic (CCTP domain + remote peer are constructor params), so a new chain is a deploy + wire once iExec Nox extends beyond these two testnets.
 
 ## The app
 
-The frontend is a **single in-browser bridge widget**. You enter an amount and a destination; the widget then drives the *entire* confidential cross-chain flow from your wallet — wrap USDC → cUSDC, pre-register, deposit (encrypted), close, settle + CCTP burn, relay, TEE integrity check, and confidential distribution — with a live step tracker. The **swap arrow flips the direction** (ETH→Arb ↔ Arb→ETH); a **Track** tab scans both directions and lists any bridges still in flight (and the phase each is stuck at); a header **Faucet** button links every faucet you need. No scripts required to bridge.
+The frontend is a **single in-browser bridge widget**, live at **[iexecwtf.vercel.app](https://iexecwtf.vercel.app)**. You enter an amount and a destination; the widget drives the *entire* confidential cross-chain flow — wrap USDC → cUSDC, pre-register, deposit (encrypted), close, settle + CCTP burn, relay, TEE integrity check, and confidential distribution — with a live step tracker. You only sign your own data: on a recurring bridge that is **~2 transactions** (`preRegisterMany` + `depositMany`, the contracts' batch entry points); the whole back half (close → settle + CCTP burn → Iris attestation → relay + integrity check → finalize) runs server-side via the app's serverless keeper at `/api/keeper`. The **swap arrow flips the direction** (ETH→Arb ↔ Arb→ETH); a **Track** tab scans both directions and lists any bridges still in flight (and the phase each is stuck at); a header **Faucet** button links every faucet you need. No scripts required to bridge.
 
 You can bridge to **any destination address** (not just your own): the sender registers the recipient's confidential claim, and the recipient decrypts their credit with their own key — the amount stays hidden. Anti-squatting still holds: a claim only resolves against the sender's source-authenticated committed deposit, and the recipient alone can reveal or spend it.
 
-Practical details: max **1 USDC per bridge** (testnet cap); the k=3 batch is met with two automatic **0.5 cUSD fillers returned to you** on the destination; the USDC approval is **one-time** (max allowance to our own Sourcify-verified wrapper) and the first wrap includes filler headroom — so from the second bridge on there are **no funding transactions at all**.
+Practical details: max **1 USDC per bridge** (testnet cap). The k=3 batch floor is met by the **operator keeper**: within ~5 s of a bridge starting, it contributes two 0.5 cUSD fillers from its own pre-wrapped liquidity (the fillers cycle back to the operator on the destination) — proven live in both directions. Your first bridge adds one-time funding (**max USDC approval** to our own Sourcify-verified wrapper + wrap + `setOperator`), ~5 signatures total; from the second bridge on it's the ~2 recurring signatures.
 
-Run it locally (`cd frontend && npm install && npm run dev`) or deploy it to Vercel with the repo's `vercel.json` — see [`docs/DEPLOY_VERCEL.md`](docs/DEPLOY_VERCEL.md).
+The keeper is a **liveness helper, not a trust point** (address `0x50ea6bF3D5e8B5F6A7b9Cc1842B09EfE01851abC`, gas-only key): every step it runs is gated by epoch state + the Circle attestation + the on-chain KMS proof, never by caller identity, so it cannot steal funds or alter amounts. And the bridge never hard-depends on it — if the keeper is unreachable the widget falls back to **client-side signing** of everything (~7 signatures with the batch entry points), and if the fill can't engage, **self-filler mode** lets you provide the three transfers yourself. On smart-account wallets, EIP-5792 atomic batching collapses phases further.
+
+Run it locally (`cd frontend && npm install && npm run dev`) or deploy it to Vercel from the **repo root** (root `vercel.json` builds the frontend and serves the keeper at `/api/keeper`) — see [`docs/DEPLOY_VERCEL.md`](docs/DEPLOY_VERCEL.md).
 
 ---
 
@@ -122,7 +126,7 @@ Run it locally (`cd frontend && npm install && npm run dev`) or deploy it to Ver
 | [`CCTPMessageParser.sol`](contracts/lib/CCTPMessageParser.sol) | — | Reads CCTP V2 message fields by verified offset |
 | CCTP V2, NoxCompute | both | **Unmodified official deployments — called, never touched** |
 
-**Design invariants:** handles are chain-scoped (no cross-chain handle use); every plaintext reveal is a two-tx pattern (`allowPublicDecryption` → off-chain KMS proof → on-chain `publicDecrypt`); every function is permissionless (guarded by state + on-chain proof verification, not caller identity); the k-anonymity floor (`minDepositors`) is enforced at close and settle.
+**Design invariants:** handles are chain-scoped (no cross-chain handle use); every plaintext reveal is a two-tx pattern (`allowPublicDecryption` → off-chain KMS proof → on-chain `publicDecrypt`); every function is permissionless (guarded by state + on-chain proof verification, not caller identity); the k-anonymity floor (`minDepositors`) is enforced at close and settle. The batch entry points (`preRegisterMany` on the Distributor, `depositMany` on the Batcher) collapse a user's data transactions from 6 to 2 while verifying the **same per-item owner-bound Nox proofs** — batching changes the transaction count, not the trust model.
 
 ### Tech stack
 
@@ -139,6 +143,7 @@ noxus/
 ├── scripts/             00 wrappers · 02 deploy+wire · 03 seed · 04 honest E2E · 05 fallback+refund
 │                        06 deploy reverse pair · 07 reverse E2E · audit_privacy · verify_sourcify · bench/probe
 ├── frontend/            Vite/React dApp — single in-browser confidential bridge widget (Bridge + Track)
+├── api/                 serverless keeper (Vercel function at /api/keeper — fill/close/settle/attest/relay/finalize)
 ├── docs/                SPEC.md (full spec + worklog) · PLAN.md · DEMO_SCRIPT.md · X_POST.md
 ├── deployments/         live addresses per chainId
 ├── feedback.md          iExec tooling feedback (required deliverable)
@@ -192,7 +197,7 @@ Faucets: [Sepolia ETH](https://sepoliafaucet.com) · [Arbitrum Sepolia ETH](http
 - Per-handle selective disclosure to auditors via on-chain ACL.
 
 **Documented, not hidden**
-- The aggregate `A` is public (it's the CCTP burn amount). Privacy requires **k ≥ 2 depositors/epoch**; `settleEpoch` reverts below `minDepositors` (demo: 3). `minDepositors` is a heuristic floor against honest-but-curious observers, not adversarial co-depositors.
+- The aggregate `A` is public (it's the CCTP burn amount). Privacy requires **k ≥ 2 depositors/epoch**; `settleEpoch` reverts below `minDepositors` (demo: 3). `minDepositors` is a heuristic floor against honest-but-curious observers, not adversarial co-depositors. Practical caveat: in the live app the k=3 floor is typically met by the two operator fillers (or your own self-fillers), so a single-user bridge is **effectively k=1** against an observer who identifies the operator's filler deposits — meaningful amount-hiding within an epoch needs multiple independent depositors.
 - The wrap boundary is public. Mitigation: pre-fund cUSDC once, bridge many hidden amounts later.
 - Participant sets & timing are visible — **confidentiality, not anonymity**.
 - Inherited trust: Circle (same as holding USDC at all) + Nox infra (TEE runners, threshold KMS, gateway).
@@ -213,7 +218,7 @@ Faucets: [Sepolia ETH](https://sepoliafaucet.com) · [Arbitrum Sepolia ETH](http
 
 ## Security
 
-An independent audit found no fund-theft path with an honest deployer, confirmed the encrypted integrity check cannot be passed with `Σ ≠ A`, and confirmed no individual amount appears on-chain (exactly 3 reveal sites). Several findings were hardened (immutable peer wiring, keyed claim pre-registration, checks-effects-interactions on the refund path). Accepted testnet limitations remain: an operator-funded fee buffer that must be monitored, a single active epoch per Batcher, **irrevocable auditor grants** (Nox has no `removeViewer`), and trust in the young iExec Nox TEE + KMS + gateway stack. Full findings, severities, and the "not for mainnet without" list are in [SECURITY.md](SECURITY.md). **Testnet-only, unaudited beyond this review — not for mainnet.**
+An independent audit found no fund-theft path with an honest deployer, confirmed the encrypted integrity check cannot be passed with `Σ ≠ A`, and confirmed no individual amount appears on-chain (exactly 3 reveal sites). Several findings were hardened (immutable peer wiring, keyed claim pre-registration, checks-effects-interactions on the refund path). Accepted testnet limitations remain: an operator-funded fee buffer that must be monitored, a single active epoch per Batcher, a **centralized operator keeper** (liveness helper only — gas-only key, cannot steal funds; users can self-serve every step), **irrevocable auditor grants** (Nox has no `removeViewer`), and trust in the young iExec Nox TEE + KMS + gateway stack. Full findings, severities, and the "not for mainnet without" list are in [SECURITY.md](SECURITY.md). **Testnet-only, unaudited beyond this review — not for mainnet.**
 
 ## License & disclaimer
 

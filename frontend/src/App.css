@@ -68,31 +68,6 @@
   font-weight: 800;
 }
 
-.app-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.app-nav-link {
-  padding: 12px 24px;
-  border-radius: 10px;
-  font-size: 16px;
-  font-weight: 500;
-  color: #8a8a8e;
-  text-decoration: none;
-  transition: all 0.15s ease;
-}
-
-.app-nav-link:hover {
-  color: #ccc;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.app-nav-link.active {
-  color: #fff;
-}
-
 .app-header-right {
   display: flex;
   align-items: center;
