@@ -281,6 +281,17 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 **Open:** video + X post; optional WalletConnect (projectId) + multi-account k>1 demo.
 **feedback.md candidates:** none new.
 
+#### Session 18 — 2026-07-22 — claude — Full 6-dimension code audit + 20 fixes + 31-test suite
+**Context:** user asked for a complete code/project audit and fixes. Ran a 6-auditor parallel workflow (contracts / frontend / keeper / tests / consistency / docs) reading the code line by line, then adversarially re-verified EVERY finding against the code before touching anything (26 confirmed, **0 false positives**).
+**Done — fixed all non-redeploy findings:**
+- **Frontend (bridge.js/BridgeFlow.jsx):** writeResilient nonce guard rewritten (pin+reuse the nonce — the old pending-vs-latest compare missed broadcast-then-errored txs → real double-send risk on wrap/depositMany); resumeRow guarded by a ref-Set not em-dash-matched status text; scanBridges destination phase only for dState≥2 (pre-register is dst-state-1 but precedes the source leg); pool-mode close TOCTOU try/caught; tryBatch no-id message clarified; conf-balance decrypt bounded-retry on the wallet client; resume rejects fallback state 5.
+- **Keeper (api/keeper.mjs):** computeMaxFee **clamped to the on-chain A/100 cap** in all 3 copies (a high Iris fee×3 could exceed 1% of A → settleEpoch revert → stranded epoch); doFill idempotent by on-chain keeper-entry count (in-memory dampener is useless on serverless), tops up only the missing fillers, drops explicit nonces (viem pending-nonce), fails CLOSED on liquidity-read failure; settledTxHash bounded getLogs range (non-archive RPC); best-effort per-instance rate limit.
+- **Tests:** 21→**31** (all green) — settleEpoch happy path (the 'hard' stub case, feasible), finalizeEpoch both branches, relayRefund CEI+negatives+happy, resolveClaim, grantAuditor, view coherence, _activeClaims skip+order. audit:privacy PASS.
+- **Docs:** README deploy-table display addresses fixed to the live CEI set; 'two 0.5 fillers' → randomized + pool mode (README/SPEC); ResourcesPage k≥2→k≥3; SECURITY **F-10** (maxFee front-run) + **F-11** (relayRefund buffer precheck) documented as accepted testnet tradeoffs; removed shadow frontend/vercel.json.
+**Not fixed (accepted, documented):** 3 contract items need a redeploy and are low/tradeoff — dust-deposit→hasMissing griefing (proper fix = partial-distribution redesign, needs the missing amount in plaintext which is confidential), F-10 maxFee front-run (gating breaks permissionless liveness), F-11 relayRefund precheck (retriable today). All in SECURITY.md.
+**Verified LIVE post-fix:** keeper-filler E2E eth-arb with random fillers + maxFee clamp → check==1 → Distributed(4). Build + eslint + 31 tests + audit:privacy all green.
+**feedback.md candidates:** none new.
+
 #### Session 17 — 2026-07-22 — claude — Real k=3 (pool mode) + randomized fillers + hackathon compliance audit
 **Done:**
 - **Randomized fillers (level 1):** keeper + self-filler fallback now draw each filler at random (0.20–0.70 cUSD, private, encrypted) instead of the fixed public 0.5 — defeats the external `amount = A − constant` recovery the grading panel flagged. Residual k=1-vs-operator documented (SECURITY L-3b).
