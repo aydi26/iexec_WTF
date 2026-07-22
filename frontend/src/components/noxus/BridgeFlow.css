@@ -294,6 +294,13 @@
 }
 .bridge-settings-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #fff; font-weight: 600; margin-bottom: 6px; }
 .bridge-settings-panel p { font-size: 12px; line-height: 1.5; color: #a0a0a5; margin: 0; }
+.bridge-pool-toggle {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: 10px;
+  padding-top: 10px; border-top: 1px solid rgba(245, 214, 75, 0.12);
+  font-size: 12px; line-height: 1.5; color: #a0a0a5; cursor: pointer;
+}
+.bridge-pool-toggle input { margin-top: 2px; accent-color: var(--nx-accent); flex-shrink: 0; }
+.bridge-pool-toggle strong { color: #fff; }
 
 .bridge-body { padding: 0 16px 16px; animation: tabFadeIn 0.25s ease; }
 @keyframes tabFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

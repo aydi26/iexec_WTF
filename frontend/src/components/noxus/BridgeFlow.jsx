@@ -32,11 +32,13 @@ import usdcSvg from "../../assets/usdc.svg";
 import arbitrumSvg from "../../assets svg/1225_Arbitrum_Logomark_FullColor_ClearSpace.svg";
 import "./BridgeFlow.css";
 
-// Two automatic background fillers that lift the batch to the k=3 floor. In
-// keeper mode the operator contributes them (bridge.js "fill"); this array is
-// the SELF-FILLER FALLBACK amounts (returned to the sender on the destination).
-// Must stay in sync with FILLER_UNITS in api/keeper.mjs.
-const FILLER_UNITS = [500_000n, 500_000n]; // 0.5 + 0.5 = 1 USDC of filler liquidity per bridge (equal)
+// Two automatic background fillers lift the batch to the k=3 floor. In keeper
+// mode the operator contributes them (bridge.js "fill"); these are the
+// SELF-FILLER FALLBACK amounts (returned to the sender on the destination),
+// RANDOMIZED per bridge (0.20–0.70 cUSD each) so a fixed public constant never
+// lets an observer recover the real amount as A − constant. Same range as the
+// keeper's private draw in api/keeper.mjs.
+const drawFillerUnits = () => 200_000n + BigInt(Math.floor(Math.random() * 51)) * 10_000n;
 const MAX_AMOUNT_UNITS = 1_000_000n; // hard cap: max 1 USDC per bridge (testnet)
 
 const STEP_GROUPS = [
@@ -163,6 +165,7 @@ export default function BridgeFlow() {
 
   const [amount, setAmount] = useState("0.05");
   const [destination, setDestination] = useState("");
+  const [poolMode, setPoolMode] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -214,8 +217,8 @@ export default function BridgeFlow() {
     try {
       const transfers = [
         { recipient: destAddr, amount: amountUnits },
-        { recipient: me, amount: FILLER_UNITS[0] },
-        { recipient: me, amount: FILLER_UNITS[1] },
+        { recipient: me, amount: drawFillerUnits() },
+        { recipient: me, amount: drawFillerUnits() },
       ];
       const res = await runConfidentialBridge({
         getWalletClient: (chainId) => getWalletClient(config, { chainId }),
@@ -226,6 +229,7 @@ export default function BridgeFlow() {
         route,
         onStep,
         keeper: callKeeper,
+        poolMode,
       });
       setElapsed(Date.now() - startRef.current);
       setResult(res);
@@ -391,12 +395,24 @@ export default function BridgeFlow() {
           <p>
             Amounts are encrypted client-side with iExec Nox (ERC-7984) and never touch the
             blockchain in cleartext. Every transfer settles inside a batch of at least three:
-            the operator&apos;s keeper normally contributes the two fillers from its own funds
-            within seconds (if it can&apos;t, you provide them yourself and they come back to
-            you on the destination). Only the batch aggregate, a single figure, is ever made
-            public.{" "}
+            the operator&apos;s keeper normally contributes two randomized fillers from its own
+            funds within seconds (if it can&apos;t, you provide them yourself). Only the batch
+            aggregate, a single figure, is ever made public.{" "}
             <Link to="/resources" className="bf-doclink">How it works ↗</Link>
           </p>
+          <label className="bridge-pool-toggle">
+            <input
+              type="checkbox"
+              checked={poolMode}
+              disabled={running}
+              onChange={(e) => setPoolMode(e.target.checked)}
+            />
+            <span>
+              <strong>Pool mode</strong> — wait for two <em>independent</em> depositors instead
+              of operator fillers. Strongest privacy (your amount is hidden among three unknown
+              amounts, even from the operator), but the batch settles only once two others join.
+            </span>
+          </label>
         </div>
       )}
 

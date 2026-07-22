@@ -38,8 +38,9 @@ const docsTree = [
           title: "The k=3 batch (why a little extra)",
           items: [
             "Privacy needs a crowd: a batch must have at least 3 deposits to hide any single amount",
-            "The operator's keeper contributes the 2 filler transfers (0.5 cUSD each, from its own pre-wrapped liquidity, cycling back to the operator on the destination) within ~5 seconds of you starting a bridge — so you only sign YOUR OWN transfer",
-            "If the keeper is offline or out of filler liquidity, the app falls back to self-filler mode: you provide all 3 transfers yourself — the 2 fillers cross with the batch and land back in your own wallet on the destination chain (the proven original flow)",
+            "Default (convenience): the operator's keeper contributes 2 RANDOMIZED fillers (0.2–0.7 cUSD each, drawn privately from its own liquidity, cycling back to the operator) within ~5s of you starting a bridge — so you only sign YOUR OWN transfer. Because the filler amounts are random and encrypted, an observer can no longer recover your amount as A minus a fixed constant — only the operator, who drew them, still knows your amount",
+            "Pool mode (strongest, toggle in settings): NO fillers — you deposit only your own transfer and the batch waits for two INDEPENDENT depositors. Your amount is then hidden among three unknown amounts even from the operator (real k=3). The trade-off is waiting for co-depositors",
+            "If the keeper is offline, the app falls back to self-filler mode: you provide the 2 (randomized) fillers yourself and they come back to you on the destination — the proven original flow",
             "You only enter your amount + destination — the batch mechanics are handled in the background",
           ],
         },

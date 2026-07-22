@@ -164,6 +164,30 @@ amounts explicitly shared — but that exposure cannot be withdrawn on-chain. A 
 mechanism is future work and would require either a Nox `removeViewer` primitive or a
 re-encryption / key-rotation scheme layered on top.
 
+### L-3b — Practical anonymity set vs. structural k=3 — **Medium (privacy)**
+
+The contract enforces a **structural** k=3 (≥3 deposits per epoch), but the *practical*
+anonymity of a single user's amount depends on where the other two deposits come from.
+Three tiers, stated plainly:
+
+- **Default (operator fillers, randomized):** the two fillers are drawn **privately at
+  random** (0.20–0.70 cUSD each) and encrypted like any deposit. This defeats the naive
+  `amount = A − constant` recovery an external observer could do against fixed fillers.
+  **Residual:** the operator drew the fillers, so it still knows the user's amount
+  (k=1-*vs-operator*), and on-chain funding/timing analysis can still label the operator's
+  filler deposits. Convenience tier, not a strong guarantee.
+- **Pool mode (settings toggle):** no fillers — the epoch waits for **two independent
+  depositors**. The user's amount is then one of three genuinely-unknown addends of the
+  public `A`, hidden **even from the operator**. This is the real k=3; the cost is latency
+  (waiting for co-depositors). Proven live with three independent wallets
+  (`scripts/10_pool_k3_proof.ts`).
+- **Organic traffic:** concurrent independent users land in the same epoch automatically
+  (the keeper's `fill` disables itself when co-depositors are present), so real k>1 emerges
+  with volume at no extra cost.
+
+The honest headline: amount-hiding is **real in pool mode / with organic traffic**, and
+**convenience-grade (k=1-vs-operator) in the default filler mode**.
+
 ### L-4 — Confidentiality rests on the iExec Nox trust model — **High (external dependency)**
 
 Amount privacy depends entirely on the **iExec Nox TEE + threshold-KMS + gateway** trust

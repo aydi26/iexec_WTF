@@ -495,6 +495,7 @@ export async function runConfidentialBridge({
   route,
   onStep,
   keeper,
+  poolMode = false,
 }) {
   const step = (key, status, detail, txHash, chainId) =>
     onStep?.(key, status, detail, txHash, chainId);
@@ -556,8 +557,19 @@ export async function runConfidentialBridge({
   // transfer: 1 preRegister + 1 deposit. If the keeper can't fill (offline,
   // liquidity exhausted), we fall back to the classic self-filler mode — the
   // user provides all 3 transfers, exactly the proven flow.
+  //
+  // POOL MODE (real k=3): no fillers at all — the user deposits ONLY their own
+  // transfer and the batch waits for two more independent depositors. Individual
+  // amounts are then hidden among three unknowns; strongest privacy this design
+  // offers, at the cost of waiting for co-depositors.
   let effective = transfers;
-  if (useKeeper) {
+  if (poolMode) {
+    effective = [transfers[0]];
+    step("prereg-1", "done", "slot reserved for a co-depositor");
+    step("prereg-2", "done", "slot reserved for a co-depositor");
+    step("deposit-1", "done", "slot reserved for a co-depositor");
+    step("deposit-2", "done", "slot reserved for a co-depositor");
+  } else if (useKeeper) {
     step("prereg-1", "active", "keeper adding the 2 batch fillers…");
     const f = await keeper("fill", { direction: route.key, epochId: epochId.toString() })
       .catch((e) => ({ error: errMsg(e) }));
@@ -709,8 +721,9 @@ export async function runConfidentialBridge({
     });
 
     // --- close the epoch (last in the batch: minDepositors is met by the deposits
-    // above). Skipped here when a keeper is driving the back half — it closes. ---
-    if (!useKeeper) {
+    // above). Skipped when a keeper drives the back half (it closes) AND in pool
+    // mode (the batch is NOT full yet — closing now would revert). ---
+    if (!useKeeper && !poolMode) {
       sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "closeEpoch", args: [], key: "close", label: "close epoch" });
     }
 
@@ -726,10 +739,12 @@ export async function runConfidentialBridge({
   // Keeper-driven when available (user signs nothing more), else client-side.
   let settleTxHash;
   let aggregate = total;
-  if (useKeeper) {
-    // The keeper's filler deposits were submitted without receipt waits — make
-    // sure the batch really holds 3 deposits before asking for close. (In the
-    // self-filler fallback the user already deposited 3, so this exits at once.)
+  // Wait for the batch to fill before anything closes it:
+  //  - keeper mode: the fillers were submitted without receipt waits (seconds);
+  //  - pool mode: we are waiting for REAL co-depositors (can take a while —
+  //    generous window, live progress, funds withdrawable while Open).
+  if (useKeeper || poolMode) {
+    const windowMs = poolMode ? 45 * 60_000 : 240_000;
     try {
       const t0 = Date.now();
       for (;;) {
@@ -737,18 +752,27 @@ export async function runConfidentialBridge({
           address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "epochInfo", args: [epochId],
         });
         if (Number(info[1]) >= 3 || Number(info[0]) !== 0) break; // full, or already closed by a concurrent flow
-        if (Date.now() - t0 > 240_000) {
+        if (Date.now() - t0 > windowMs) {
           throw new Error(
-            "the batch never reached 3 deposits — your funds are safe (a deposit can be withdrawn while the epoch is open); please retry in a moment"
+            poolMode
+              ? "no co-depositors joined within the window — your deposit stays in the open batch (withdrawable, or Resume from Track once the batch fills)"
+              : "the batch never reached 3 deposits — your funds are safe (a deposit can be withdrawn while the epoch is open); please retry in a moment"
           );
         }
-        step("close", "active", `waiting for the fillers to land… (${Number(info[1])}/3 deposits)`);
-        await sleep(4000);
+        step(
+          "close", "active",
+          poolMode
+            ? `waiting for co-depositors… (${Number(info[1])}/3 in the batch)`
+            : `waiting for the fillers to land… (${Number(info[1])}/3 deposits)`
+        );
+        await sleep(poolMode ? 6000 : 4000);
       }
     } catch (e) {
       step("close", "error", errMsg(e));
       throw e;
     }
+  }
+  if (useKeeper) {
     const kr = await runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc, waitDst, SRC, DST, SRC_DOMAIN });
     settleTxHash = kr.settleTxHash;
     aggregate = kr.aggregate;
@@ -757,6 +781,25 @@ export async function runConfidentialBridge({
   step("settle", "active", "reading epoch handles + revealing aggregate");
   try {
     const wallet = await getWalletClient(SRC);
+    // Pool mode without a keeper: the batch just filled — close it now (it was
+    // deliberately left out of the user's source batch).
+    if (poolMode) {
+      const st = await publicClientSource.readContract({
+        address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "epochInfo", args: [epochId],
+      });
+      if (Number(st[0]) === 0) {
+        step("close", "active", "batch full — confirm closeEpoch in wallet");
+        const ch = await writeResilient(
+          wallet, publicClientSource,
+          { address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "closeEpoch", args: [], account: wallet.account, chain: wallet.chain },
+          (n) => step("close", "active", `close · ${n}`)
+        );
+        await waitSrc(ch);
+        step("close", "done", "epoch closed", ch, SRC);
+      } else {
+        step("close", "done", "already closed by a co-depositor");
+      }
+    }
     // publicDecrypt polls do an on-chain read per attempt — RPC-pinned client.
     const handleClient = await noxClientFor(SRC, me, wallet);
 
@@ -774,7 +817,10 @@ export async function runConfidentialBridge({
     ]);
     step("settle", "active", `revealed A=${sumRes.value.toString()} — computing CCTP fee`);
 
-    const maxFee = await computeMaxFee(total, SRC_DOMAIN, DST_DOMAIN);
+    // Fee is a fraction of the REAL aggregate A (revealed), not the user's own
+    // amount — in pool mode `total` is only this depositor's share.
+    aggregate = sumRes.value;
+    const maxFee = await computeMaxFee(sumRes.value, SRC_DOMAIN, DST_DOMAIN);
 
     step("settle", "active", "confirm settleEpoch (burns + bridges) in wallet");
     settleTxHash = await writeResilient(

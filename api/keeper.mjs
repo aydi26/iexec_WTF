@@ -106,7 +106,14 @@ async function computeMaxFee(amount, srcDomain, dstDomain) {
   }
 }
 
-const FILLER_UNITS = [500_000n, 500_000n];
+// Filler amounts are RANDOMIZED per bridge (0.20–0.70 cUSD each, 0.01 grain),
+// drawn server-side and never returned to the client: with fixed public filler
+// constants an observer could compute the user's amount as A − constant. With
+// private random fillers, the public aggregate only bounds the user's amount
+// within the filler-sum distribution (the operator itself still knows its own
+// fillers — documented as the residual k=1-vs-operator in SECURITY.md).
+const FILLER_MIN = 200_000n;
+const drawFiller = () => FILLER_MIN + BigInt(Math.floor(Math.random() * 51)) * 10_000n;
 const fillingNow = new Set();
 
 async function doFill(route, epochId) {
@@ -128,8 +135,9 @@ async function doFill(route, epochId) {
     }
     if (activeCount > 1) return { skipped: true, reason: "epoch already has co-depositors" };
 
+    const units = [drawFiller(), drawFiller()]; // private to the operator
     const srcHc = await createViemHandleClient(src.wallet);
-    const need = FILLER_UNITS[0] + FILLER_UNITS[1];
+    const need = units[0] + units[1];
     try {
       const balHandle = await src.pub.readContract({ address: route.cusdc, abi: CUSDC_ABI, functionName: "confidentialBalanceOf", args: [me] });
       if (balHandle && balHandle !== `0x${"0".repeat(64)}`) {
@@ -142,7 +150,7 @@ async function doFill(route, epochId) {
 
     const dstHc = await createViemHandleClient(dst.wallet);
     const fills = [];
-    for (const amount of FILLER_UNITS) {
+    for (const amount of units) {
       const dstEnc = await dstHc.encryptInput(amount, "uint256", route.distributor);
       const srcEnc = await srcHc.encryptInput(amount, "uint256", route.batcher);
       fills.push({ dstEnc, srcEnc });
