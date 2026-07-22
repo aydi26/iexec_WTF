@@ -26,6 +26,7 @@ import { injected } from "wagmi/connectors";
 // leading with Alchemy/drpc for the app's OWN reads leaves the wallet's
 // publicnode budget for its txs. (viem fallback still rotates on any 429.)
 const ALCHEMY_SEPOLIA = import.meta.env.VITE_ALCHEMY_SEPOLIA;
+const ALCHEMY_ARB = import.meta.env.VITE_ALCHEMY_ARB;
 export const RPC_URLS = {
   [sepolia.id]: [
     ...(ALCHEMY_SEPOLIA ? [ALCHEMY_SEPOLIA] : []),
@@ -34,6 +35,7 @@ export const RPC_URLS = {
     "https://ethereum-sepolia-rpc.publicnode.com",
   ],
   [arbitrumSepolia.id]: [
+    ...(ALCHEMY_ARB ? [ALCHEMY_ARB] : []),
     "https://arbitrum-sepolia.drpc.org",
     "https://sepolia-rollup.arbitrum.io/rpc",
     "https://arbitrum-sepolia-rpc.publicnode.com",
