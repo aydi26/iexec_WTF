@@ -281,6 +281,15 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 **Open:** video + X post; optional WalletConnect (projectId) + multi-account k>1 demo.
 **feedback.md candidates:** none new.
 
+#### Session 17 — 2026-07-22 — claude — Real k=3 (pool mode) + randomized fillers + hackathon compliance audit
+**Done:**
+- **Randomized fillers (level 1):** keeper + self-filler fallback now draw each filler at random (0.20–0.70 cUSD, private, encrypted) instead of the fixed public 0.5 — defeats the external `amount = A − constant` recovery the grading panel flagged. Residual k=1-vs-operator documented (SECURITY L-3b).
+- **Pool mode (level 2, real k=3):** frontend settings toggle → `runConfidentialBridge({poolMode})` deposits only the user's own transfer, skips fillers + the source-leg close, polls the batch to 3/3 (45-min window, live `x/3` progress, withdrawable while Open), then closes (client) or hands to the keeper, using the REVEALED aggregate for the CCTP fee. Widget toggle + honest copy; three privacy tiers documented (README / SECURITY L-3b / Resources).
+- **Proven live:** `scripts/10_pool_k3_proof.ts` — 3 independent wallets deposit hidden amounts into one epoch, A=0.98 public, `entryAt` shows 3 distinct depositors, three unknowns in the sum → no individual amount recoverable, check==1, Distributed(4).
+- **Hackathon compliance audit** (against the WTF Summer brief): STRONG fit — privacy over unmodified Circle CCTP V2 via batching (exactly the ask), deployed ETH Sepolia (+ Arb), end-to-end zero-mock (⭐⭐⭐ criterion), feedback.md present, existing-work disclosure present (frontend shell adapted, protocol logic new). **BLOCKER found: the GitHub repo `aydi26/iexec_WTF` is PRIVATE** (brief requires public) — must be flipped public before submission. Open user deliverables: ≤4-min video + X post tagging @iEx_ec.
+**Open (user):** make repo PUBLIC; record ≤4-min video; X post. Accepted: Nox beta trust model, centralized operator, no professional audit.
+**feedback.md candidates:** none new.
+
 #### Session 16 — 2026-07-22 — claude — Grading-panel remediation: F-9 CEI redeploy, 21-test L1 suite, Resume UX
 **Context:** a 3-judge neutral grading panel (security / hackathon / product lenses) scored the project 80–83/100 and produced concrete findings. User directive: fix every fixable weakness.
 **Done:**
