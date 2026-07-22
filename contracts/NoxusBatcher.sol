@@ -177,6 +177,8 @@ contract NoxusBatcher {
 
     /// @notice Heals the innocent zero/short-transfer case or a change of mind
     /// while the epoch is still Open. Removes the deposit from the sum and refunds.
+    /// Checks-effects-interactions: the withdrawn flag and count are settled
+    /// BEFORE the external transfer, so a reentrant call cannot double-withdraw.
     function withdrawDeposit(uint256 epochId, uint256 index) external {
         Epoch storage e = epochs[epochId];
         if (e.state != State.Open) revert NotOpen();
@@ -184,15 +186,17 @@ contract NoxusBatcher {
         if (en.depositor != msg.sender) revert NotDepositor();
         if (en.withdrawn) revert AlreadyWithdrawn();
 
+        // effects
+        en.withdrawn = true;
+        e.activeCount -= 1;
         (ebool ok, euint256 s) = Nox.safeSub(e.encSum, en.transferred);
         e.encSum = Nox.select(ok, s, e.encSum);
         Nox.allowThis(e.encSum);
 
+        // interactions
         Nox.allowTransient(en.transferred, address(wrapper));
         cusdc.confidentialTransfer(msg.sender, en.transferred);
 
-        en.withdrawn = true;
-        e.activeCount -= 1;
         emit DepositWithdrawn(epochId, index);
     }
 

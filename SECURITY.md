@@ -106,6 +106,17 @@ interactions), and `relayReceive` also accepts state `None` — an all-missing b
 and routes straight to fallback/refund-to-source, so the aggregate is never stranded. Fixed
 in source, redeployed, and Sourcify-verified.
 
+### F-9 — CEI on `withdrawDeposit` — **Low** (independent grading review, 2026-07-22)
+
+**Was:** `withdrawDeposit` performed the external `confidentialTransfer` *before* setting
+`withdrawn = true` and decrementing `activeCount` — a checks-effects-interactions
+inconsistency the F-3/F-8 hardening pass missed. Practical risk was low (ERC-7984
+transfers have no receiver hooks to reenter through), but the ordering was wrong.
+
+**Now:** the `withdrawn` flag, count and encrypted-sum update are all settled **before**
+the external transfer, so a reentrant call cannot double-withdraw even in principle.
+Fixed in source, redeployed (all four directional contracts), and Sourcify-verified.
+
 ---
 
 ## Residual accepted limitations (testnet v1)
@@ -124,6 +135,16 @@ impose cost on the honest side even though the attacker **gains nothing** (they 
 recover their attested deposit). Griefing is unprofitable for the attacker but not free for
 the operator. Mitigation for production would be bonded fallback / anti-griefing economics
 (see below).
+
+**Concrete cheapest griefing path (stated explicitly):** anyone can deposit dust into the
+open epoch **without pre-registering a matching destination claim**. At relay time that
+committed entry has no registration → `hasMissing` → the epoch cannot distribute and must
+take the fallback → refund round-trip, whose reverse-CCTP fee lands on the operator's
+buffer. The attacker gains nothing and pays gas + their own dust deposit round-trip; the
+operator loses the CCTP fee (bps of A — cents at testnet sizes) per round. Combined with
+the single-active-epoch design (L-2) this can also serialize the route while the round-trip
+completes. Accepted for testnet; production mitigations are the bonded-deposit /
+per-depositor-epoch economics listed below.
 
 ### L-2 — Single active epoch per Batcher — **Medium**
 
@@ -165,6 +186,16 @@ client-side signing, and self-filler mode replaces the operator fillers), and `f
 rescues a stuck epoch after the timeout. The **centralized operator** (fillers, fee buffer,
 keeper gas) is an accepted testnet limitation; production would want a decentralized keeper
 set or user-funded economics.
+
+The endpoint itself is **deliberately unauthenticated** (the steps it triggers are
+permissionless by design), which bounds — but does not eliminate — endpoint griefing:
+every transaction is **simulated before sending** (a hostile caller cannot make the keeper
+burn gas on reverting calls), and the `fill` phase's on-chain guards (epoch must be Open,
+keeper must have no live deposit in it, at most one co-depositor, liquidity check before
+depositing) cap the exposure at **one filler pair per epoch**, which a stranded pair
+self-heals by serving as the next bridge's fillers. Residual cost to the operator is
+bounded gas + at most one parked filler pair; a production deployment would add rate
+limiting or origin binding at the edge.
 
 ### L-6 — Testnet-only and unaudited beyond this review — **Informational**
 

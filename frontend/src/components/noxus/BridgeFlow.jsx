@@ -4,8 +4,10 @@
 // and a Track tab (the live step tracker + final "bilan"). The user enters one
 // amount + one destination; everything else — wrap, pre-register, deposit,
 // batch, CCTP bridge, TEE integrity check, distribution — runs in the
-// background. A k=3 batch is met with two automatic filler transfers back to the
-// sender. Orchestration is delegated UNCHANGED to runConfidentialBridge.
+// background. A k=3 batch is met with two automatic fillers — normally
+// contributed by the operator's keeper from its own funds (self-filler
+// fallback: the user provides them and they cycle back). Orchestration is
+// delegated UNCHANGED to runConfidentialBridge.
 //
 // BIDIRECTIONAL: the swap pill flips the route (ETH->Arb <-> Arb->ETH); both
 // directional pairs are deployed, so the same widget bridges either way.
@@ -24,15 +26,17 @@ import {
   txUrl,
 } from "../../config/contracts";
 import { parseUsdc, formatUsdc, isHex } from "./format";
-import { runConfidentialBridge } from "../../lib/bridge";
+import { runConfidentialBridge, resumeConfidentialBridge } from "../../lib/bridge";
 import { shorten } from "./shared";
 import usdcSvg from "../../assets/usdc.svg";
 import arbitrumSvg from "../../assets svg/1225_Arbitrum_Logomark_FullColor_ClearSpace.svg";
 import "./BridgeFlow.css";
 
-// Two automatic background fillers (paid back to the sender) that lift the batch
-// to the k-anonymity floor of 3. Never shown as inputs.
-const FILLER_UNITS = [500_000n, 500_000n]; // 0.5 + 0.5 = 1 USDC of filler liquidity per bridge (equal), returned to you
+// Two automatic background fillers that lift the batch to the k=3 floor. In
+// keeper mode the operator contributes them (bridge.js "fill"); this array is
+// the SELF-FILLER FALLBACK amounts (returned to the sender on the destination).
+// Must stay in sync with FILLER_UNITS in api/keeper.mjs.
+const FILLER_UNITS = [500_000n, 500_000n]; // 0.5 + 0.5 = 1 USDC of filler liquidity per bridge (equal)
 const MAX_AMOUNT_UNITS = 1_000_000n; // hard cap: max 1 USDC per bridge (testnet)
 
 const STEP_GROUPS = [
@@ -171,6 +175,7 @@ export default function BridgeFlow() {
   const [bridges, setBridges] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState(null);
+  const [resuming, setResuming] = useState({}); // row key -> live status text
 
   const route = buildRoute(direction);
   const configReady = !!route.batcher && !!route.distributor && !!route.destCusdc;
@@ -310,7 +315,7 @@ export default function BridgeFlow() {
               "In progress";
             if (bState === 2) agg = bAgg;
           }
-          all.push({ id: id.toString(), dir, phase, agg, key: `${rd.key}-${id}` });
+          all.push({ id: id.toString(), dir, phase, agg, key: `${rd.key}-${id}`, routeKey: rd.key });
         }
       }
       setBridges(all);
@@ -325,6 +330,29 @@ export default function BridgeFlow() {
   useEffect(() => {
     if (view === "track") scanBridges();
   }, [view, result, scanBridges]);
+
+  // Resume a stuck/in-flight epoch entirely through the keeper (no signature —
+  // every remaining step is permissionless). Kills the "no in-app recovery" gap.
+  async function resumeRow(b) {
+    if (resuming[b.key] && !/failed|✓|—/.test(resuming[b.key])) return; // already running
+    setResuming((s) => ({ ...s, [b.key]: "resuming…" }));
+    try {
+      const r = buildRoute(b.routeKey);
+      const res = await resumeConfidentialBridge({
+        keeper: callKeeper,
+        route: r,
+        epochId: b.id,
+        publicClientSource: clientFor(r.srcChainId),
+        publicClientDest: clientFor(r.dstChainId),
+        onStep: (_k, _st, detail) =>
+          setResuming((s) => ({ ...s, [b.key]: (detail || "resuming…").slice(0, 90) })),
+      });
+      setResuming((s) => ({ ...s, [b.key]: res?.alreadyComplete ? "already complete ✓" : "completed ✓" }));
+      scanBridges();
+    } catch (e) {
+      setResuming((s) => ({ ...s, [b.key]: `failed: ${(e?.shortMessage || e?.message || "error").slice(0, 110)}` }));
+    }
+  }
 
   const started = Object.keys(steps).length > 0;
   // First group that is not fully done = the step in flight (for the caption).
@@ -362,9 +390,10 @@ export default function BridgeFlow() {
           <div className="bridge-settings-row">Confidential batch · <strong>k = 3</strong></div>
           <p>
             Amounts are encrypted client-side with iExec Nox (ERC-7984) and never touch the
-            blockchain in cleartext. To preserve k-anonymity, every transfer settles inside a
-            batch of at least three — yours plus two fillers that are returned to you. Only the
-            batch aggregate, a single figure decoupled from any individual amount, is ever made
+            blockchain in cleartext. Every transfer settles inside a batch of at least three:
+            the operator&apos;s keeper normally contributes the two fillers from its own funds
+            within seconds (if it can&apos;t, you provide them yourself and they come back to
+            you on the destination). Only the batch aggregate, a single figure, is ever made
             public.{" "}
             <Link to="/resources" className="bf-doclink">How it works ↗</Link>
           </p>
@@ -599,11 +628,21 @@ export default function BridgeFlow() {
               <div className="bf-board-row" key={b.key}>
                 <div className="bf-board-left">
                   <span className="bf-board-epoch">{b.dir} · Epoch #{b.id}</span>
-                  <span className="bf-board-phase">{b.phase}</span>
+                  <span className="bf-board-phase">{resuming[b.key] || b.phase}</span>
                 </div>
-                {b.agg != null && b.agg > 0n && (
-                  <span className="bf-board-agg">A = {formatUsdc(b.agg)} USDC</span>
-                )}
+                <div className="bf-board-right">
+                  {b.agg != null && b.agg > 0n && (
+                    <span className="bf-board-agg">A = {formatUsdc(b.agg)} USDC</span>
+                  )}
+                  <button
+                    className="bf-linkbtn"
+                    onClick={() => resumeRow(b)}
+                    disabled={!!resuming[b.key] && !/failed|✓/.test(resuming[b.key])}
+                    title="Drive the remaining permissionless steps through the keeper (no signature needed)"
+                  >
+                    {resuming[b.key] && !/failed|✓/.test(resuming[b.key]) ? "Resuming…" : "Resume"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

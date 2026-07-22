@@ -95,10 +95,10 @@ The bridge is **bidirectional** — every chain hosts both a `NoxusBatcher` and 
 |---|---|---|---|
 | `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0x47d150…e41C`](https://sepolia.etherscan.io/address/0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C) | confidential USDC |
 | `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0xD74A1F…0209`](https://sepolia.arbiscan.io/address/0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209) | confidential USDC |
-| `NoxusBatcher` | ETH Sepolia | [`0x4eDbe8…7E77`](https://sepolia.etherscan.io/address/0x4eDbe88f04A547c20a3dfD3A7c7452479f3c7E77) | source · ETH→Arb |
-| `NoxusDistributor` | Arb Sepolia | [`0xc5097a…83B2`](https://sepolia.arbiscan.io/address/0xc5097a40C5Fd58E2Db5cb7989C9cBD85251583B2) | dest · ETH→Arb |
-| `NoxusBatcher` | Arb Sepolia | [`0xAFF377…482a`](https://sepolia.arbiscan.io/address/0xAFF3778e41Df36c4895154196f7880969A1B482a) | source · Arb→ETH |
-| `NoxusDistributor` | ETH Sepolia | [`0xbd259A…A539`](https://sepolia.etherscan.io/address/0xbd259Aa982aBE9E8f3f5CD28d783AB452264A539) | dest · Arb→ETH |
+| `NoxusBatcher` | ETH Sepolia | [`0x4eDbe8…7E77`](https://sepolia.etherscan.io/address/0x1a3534aBA28229392b881DC9f226F3b907a2b7FD) | source · ETH→Arb |
+| `NoxusDistributor` | Arb Sepolia | [`0xc5097a…83B2`](https://sepolia.arbiscan.io/address/0xF67242Fc24da75AD25c8B80b9FcfACbd9b5Ec499) | dest · ETH→Arb |
+| `NoxusBatcher` | Arb Sepolia | [`0xAFF377…482a`](https://sepolia.arbiscan.io/address/0x76A6507c819500Cc8793f70f8735Be5864B1dea3) | source · Arb→ETH |
+| `NoxusDistributor` | ETH Sepolia | [`0xbd259A…A539`](https://sepolia.etherscan.io/address/0x10c2430b89CeCBE08aabEA57E88AEC76B95F9c3f) | dest · Arb→ETH |
 
 > Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3. The contracts are direction-agnostic (CCTP domain + remote peer are constructor params), so a new chain is a deploy + wire once iExec Nox extends beyond these two testnets.
 

@@ -379,6 +379,11 @@ async function runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc,
   const s = await keeper("settle", { direction: dir, epochId: eid });
   if (s?.hash) await waitSrc(s.hash);
   const settleTxHash = s?.hash;
+  if (!settleTxHash) {
+    // Already-settled epoch whose burn tx the keeper couldn't recover from logs
+    // (non-archive RPC) — fail fast instead of polling Iris with no tx hash.
+    throw new Error("epoch already settled but the burn tx could not be recovered — retry shortly (or set a private RPC for the keeper)");
+  }
   step("settle", "done", `settled + burned by the keeper · A=${s?.aggregate ?? total.toString()}`, settleTxHash, SRC);
 
   step("relay-attest", "active", "keeper polling Circle Iris for the attestation…");
@@ -405,7 +410,65 @@ async function runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc,
   if (f?.hash) await waitDst(f.hash);
   step("finalize", "done", "confidential distribution complete (keeper)", f?.hash, DST);
 
-  return { settleTxHash, aggregate: total };
+  // Report the TRUE public aggregate A revealed at settle (user amount + the
+  // fillers), not just the user's own total — the recap shows the real A.
+  let aggregate = total;
+  try { if (s?.aggregate != null) aggregate = BigInt(s.aggregate); } catch { /* keep total */ }
+  return { settleTxHash, aggregate };
+}
+
+/**
+ * Resume a stuck/in-flight bridge from the Track tab: state-aware, keeper-driven,
+ * requires NO wallet signature (every remaining step is permissionless). Reads the
+ * epoch state on both legs and continues from wherever it stopped:
+ *   src Open(3+)/Closed/Settled -> close/settle -> Iris -> relay+check -> finalize
+ *   dst Received/CheckPending   -> check/finalize only
+ * Throws with an actionable message when resume is impossible (batch not full,
+ * keeper down, or the epoch is already terminal).
+ */
+export async function resumeConfidentialBridge({ keeper, route, epochId, publicClientSource, publicClientDest, onStep }) {
+  const step = (key, status, detail, txHash, chainId) => onStep?.(key, status, detail, txHash, chainId);
+  if (typeof keeper !== "function" || !(await keeperAvailable(keeper))) {
+    throw new Error("keeper unreachable — resume runs through the keeper; try again in a moment");
+  }
+  const eid = BigInt(epochId);
+  const waitSrc = (hash) => publicClientSource.waitForTransactionReceipt({ hash });
+  const waitDst = (hash) => publicClientDest.waitForTransactionReceipt({ hash });
+
+  // Destination first: if the mint already landed, only check/finalize remain.
+  let dstState = 0;
+  try {
+    const di = await publicClientDest.readContract({
+      address: route.distributor, abi: DISTRIBUTOR_ABI, functionName: "epochInfo", args: [eid],
+    });
+    dstState = Number(di[0]);
+  } catch { /* treat as not yet relayed */ }
+  if (dstState === 4 || dstState === 6) return { alreadyComplete: true };
+  if (dstState >= 2) {
+    step("resume", "active", "mint already relayed — running check + finalize…");
+    if (dstState === 2) await keeper("relaycheck", { direction: route.key, epochId: eid.toString(), message: null, attestation: null });
+    const f = await keeper("finalize", { direction: route.key, epochId: eid.toString() });
+    if (f?.checkFailed) throw new Error(`integrity check failed (Sum != A): revealed ${f.value}`);
+    if (f?.hash) await waitDst(f.hash);
+    step("resume", "done", "confidential distribution complete");
+    return { settleTxHash: null, aggregate: null };
+  }
+
+  // Source leg: make sure the batch can actually advance.
+  const info = await publicClientSource.readContract({
+    address: route.batcher, abi: BATCHER_ABI, functionName: "epochInfo", args: [eid],
+  });
+  const srcState = Number(info[0]);
+  if (srcState === 3) return { alreadyComplete: true }; // refunded (terminal)
+  if (srcState === 0 && Number(info[1]) < 3) {
+    throw new Error(
+      `batch not full (${Number(info[1])}/3 deposits) — bridge again to fill it, or withdraw your deposit while the epoch is open`
+    );
+  }
+  return runKeeperBackHalf({
+    keeper, route, epochId: eid, total: 0n, step, waitSrc, waitDst,
+    SRC: route.srcChainId, DST: route.dstChainId, SRC_DOMAIN: route.srcDomain,
+  });
 }
 
 /**

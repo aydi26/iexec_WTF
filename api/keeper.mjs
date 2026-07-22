@@ -212,12 +212,20 @@ async function doRelayCheck(route, epochId, message, attestation) {
   if (Number(di[0]) < 2) {
     relayHash = await send(pub, wallet, { address: route.distributor, abi: DIST_ABI, functionName: "relayReceive", args: [message, attestation] });
     await pub.waitForTransactionReceipt({ hash: relayHash });
-    di = await pub.readContract({ address: route.distributor, abi: DIST_ABI, functionName: "epochInfo", args: [epochId] });
+    // Stale-read guard: some RPCs briefly serve pre-receipt state right after
+    // the receipt — re-read until the Received state is visible, else the
+    // check below would be silently skipped.
+    for (let i = 0; i < 6; i++) {
+      di = await pub.readContract({ address: route.distributor, abi: DIST_ABI, functionName: "epochInfo", args: [epochId] });
+      if (Number(di[0]) >= 2) break;
+      await sleep(1500);
+    }
   }
   let checkHash = null;
   if (Number(di[0]) === 2) {
     checkHash = await send(pub, wallet, { address: route.distributor, abi: DIST_ABI, functionName: "checkEpoch", args: [epochId] });
     await pub.waitForTransactionReceipt({ hash: checkHash });
+    di = await pub.readContract({ address: route.distributor, abi: DIST_ABI, functionName: "epochInfo", args: [epochId] });
   }
   return { relayHash, checkHash, state: Number(di[0]) };
 }
@@ -232,7 +240,13 @@ async function doFinalize(route, epochId) {
   if (checkRes.value !== 1n) return { hash: null, checkFailed: true, value: checkRes.value.toString() };
   const hash = await send(pub, wallet, { address: route.distributor, abi: DIST_ABI, functionName: "finalizeEpoch", args: [epochId, checkRes.decryptionProof] });
   await pub.waitForTransactionReceipt({ hash });
-  const di2 = await pub.readContract({ address: route.distributor, abi: DIST_ABI, functionName: "epochInfo", args: [epochId] });
+  // Stale-read guard (same as relaycheck): re-read until the post-tx state shows.
+  let di2 = di;
+  for (let i = 0; i < 6; i++) {
+    di2 = await pub.readContract({ address: route.distributor, abi: DIST_ABI, functionName: "epochInfo", args: [epochId] });
+    if (Number(di2[0]) >= 4) break;
+    await sleep(1500);
+  }
   return { hash, state: Number(di2[0]) };
 }
 

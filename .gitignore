@@ -21,3 +21,4 @@ typechain-types/
 Thumbs.db
 
 # Noxus contract addresses per chain (safe to commit — public)
+.claude/
