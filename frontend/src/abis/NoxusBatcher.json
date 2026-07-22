@@ -56,6 +56,11 @@
     "type": "error"
   },
   {
+    "inputs": [],
+    "name": "LengthMismatch",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
         "internalType": "bytes",
@@ -288,6 +293,34 @@
       }
     ],
     "name": "deposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address[]",
+        "name": "dstRecipients",
+        "type": "address[]"
+      },
+      {
+        "internalType": "externalEuint256[]",
+        "name": "srcHandles",
+        "type": "bytes32[]"
+      },
+      {
+        "internalType": "bytes[]",
+        "name": "srcProofs",
+        "type": "bytes[]"
+      },
+      {
+        "internalType": "bytes32[]",
+        "name": "dstHandles",
+        "type": "bytes32[]"
+      }
+    ],
+    "name": "depositMany",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

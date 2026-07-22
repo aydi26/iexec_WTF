@@ -530,19 +530,29 @@ export async function runConfidentialBridge({
     const wallet = await getWalletClient(DST);
     const addr = wallet.account?.address ?? wallet.account;
     const handleClient = await noxClientFor(DST, addr, wallet);
-    const calls = [];
+    // Encrypt all destination claims off-chain (no signature), then pre-register
+    // them all in ONE on-chain tx via preRegisterMany — one wallet confirmation
+    // for every transfer, regardless of wallet batching support.
+    const recipients = [];
+    const handles = [];
+    const proofs = [];
     for (let i = 0; i < effective.length; i++) {
-      step(`prereg-${i}`, "active", `pre-register transfer ${i + 1}/${effective.length} → ${short(effective[i].recipient)} · encrypting locally`);
+      step(`prereg-${i}`, "active", `encrypting transfer ${i + 1}/${effective.length} → ${short(effective[i].recipient)} locally`);
       const enc = await encryptWithRetry(handleClient, effective[i].amount, DISTRIBUTOR_ADDRESS);
       dstHandles[i] = enc.handle;
-      calls.push({
-        address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "preRegister",
-        args: [epochId, effective[i].recipient, enc.handle, enc.handleProof],
-        key: `prereg-${i}`, label: `pre-register → ${short(effective[i].recipient)}`,
-      });
+      recipients.push(effective[i].recipient);
+      handles.push(enc.handle);
+      proofs.push(enc.handleProof);
     }
-    step("prereg-0", "active", "confirm the pre-registrations (one signature if your wallet supports batching)");
+    const calls = [{
+      address: DISTRIBUTOR_ADDRESS, abi: DISTRIBUTOR_ABI, functionName: "preRegisterMany",
+      args: [epochId, recipients, handles, proofs],
+      key: "prereg-0", label: `pre-register ${effective.length} transfer${effective.length > 1 ? "s" : ""}`,
+    }];
+    step("prereg-0", "active", `confirm pre-registration (${effective.length} in one tx)`);
     await runCalls(wallet, waitDst, publicClientDest, DST, calls, step);
+    // Mirror the single "done" onto the per-transfer tracker rows.
+    for (let i = 1; i < effective.length; i++) step(`prereg-${i}`, "done", "pre-registered (batched)");
   } catch (e) {
     step("prereg-0", "error", errMsg(e));
     throw e;
@@ -615,14 +625,25 @@ export async function runConfidentialBridge({
     }
     if (sourceCalls.length === 0) step("fund", "done", "already funded — no funding transactions needed");
 
-    // --- deposits: encrypt off-chain, reuse the exact dstHandles[i] ---
-    // RPC-pinned Nox client: encryption must never depend on the wallet's RPC.
+    // --- deposits: encrypt off-chain, reuse the exact dstHandles[i], then
+    // deposit them all in ONE tx via depositMany. RPC-pinned Nox client so
+    // encryption never depends on the wallet's RPC. ---
     const depHc = await noxClientFor(SRC, me, wallet);
+    const depRecipients = [];
+    const depHandles = [];
+    const depProofs = [];
     for (let i = 0; i < effective.length; i++) {
-      step(`deposit-${i}`, "active", `deposit transfer ${i + 1}/${effective.length} → ${short(effective[i].recipient)} · encrypting locally`);
+      step(`deposit-${i}`, "active", `encrypting deposit ${i + 1}/${effective.length} → ${short(effective[i].recipient)} locally`);
       const enc = await encryptWithRetry(depHc, effective[i].amount, BATCHER_ADDRESS);
-      sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "deposit", args: [effective[i].recipient, enc.handle, enc.handleProof, dstHandles[i]], key: `deposit-${i}`, label: `deposit → ${short(effective[i].recipient)}` });
+      depRecipients.push(effective[i].recipient);
+      depHandles.push(enc.handle);
+      depProofs.push(enc.handleProof);
     }
+    sourceCalls.push({
+      address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "depositMany",
+      args: [depRecipients, depHandles, depProofs, dstHandles.slice(0, effective.length)],
+      key: "deposit-0", label: `deposit ${effective.length} transfer${effective.length > 1 ? "s" : ""}`,
+    });
 
     // --- close the epoch (last in the batch: minDepositors is met by the deposits
     // above). Skipped here when a keeper is driving the back half — it closes. ---
@@ -630,8 +651,9 @@ export async function runConfidentialBridge({
       sourceCalls.push({ address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "closeEpoch", args: [], key: "close", label: "close epoch" });
     }
 
-    step("fund", "active", `confirm the source leg — wrap + deposits${useKeeper ? "" : " + close"} (one signature if your wallet supports batching)`);
+    step("fund", "active", `confirm the source leg — fund + deposit${useKeeper ? "" : " + close"}`);
     await runCalls(wallet, waitSrc, publicClientSource, SRC, sourceCalls, step);
+    for (let i = 1; i < effective.length; i++) step(`deposit-${i}`, "done", "deposited (batched)");
   } catch (e) {
     step("fund", "error", errMsg(e));
     throw e;

@@ -85,6 +85,7 @@ contract NoxusBatcher {
     error AlreadyWithdrawn();
     error AggregateMismatch();
     error AlreadyWired();
+    error LengthMismatch();
 
     constructor(
         IERC20 _usdc,
@@ -128,6 +129,35 @@ contract NoxusBatcher {
     ) external {
         Epoch storage e = epochs[currentEpoch];
         if (e.state != State.Open) revert NotOpen();
+        _deposit(e, dstRecipient, srcHandle, srcProof, dstHandle);
+    }
+
+    /// @notice Deposit several encrypted transfers in ONE transaction (one wallet
+    /// signature for all of them). Each element carries its own Nox input proof,
+    /// owner-bound to the caller exactly as in `deposit`, so batching changes only
+    /// the tx count, not the trust model. Arrays must be equal length.
+    function depositMany(
+        address[] calldata dstRecipients,
+        externalEuint256[] calldata srcHandles,
+        bytes[] calldata srcProofs,
+        bytes32[] calldata dstHandles
+    ) external {
+        uint256 n = dstRecipients.length;
+        if (n == 0 || srcHandles.length != n || srcProofs.length != n || dstHandles.length != n) revert LengthMismatch();
+        Epoch storage e = epochs[currentEpoch];
+        if (e.state != State.Open) revert NotOpen();
+        for (uint256 i; i < n; ++i) {
+            _deposit(e, dstRecipients[i], srcHandles[i], srcProofs[i], dstHandles[i]);
+        }
+    }
+
+    function _deposit(
+        Epoch storage e,
+        address dstRecipient,
+        externalEuint256 srcHandle,
+        bytes calldata srcProof,
+        bytes32 dstHandle
+    ) internal {
         if (e.activeCount >= maxClaims) revert TooManyClaims();
 
         euint256 amt = Nox.fromExternal(srcHandle, srcProof);

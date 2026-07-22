@@ -56,6 +56,11 @@
     "type": "error"
   },
   {
+    "inputs": [],
+    "name": "LengthMismatch",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
         "internalType": "bytes",
@@ -505,6 +510,34 @@
       }
     ],
     "name": "preRegister",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address[]",
+        "name": "recipients",
+        "type": "address[]"
+      },
+      {
+        "internalType": "externalEuint256[]",
+        "name": "dstHandles",
+        "type": "bytes32[]"
+      },
+      {
+        "internalType": "bytes[]",
+        "name": "proofs",
+        "type": "bytes[]"
+      }
+    ],
+    "name": "preRegisterMany",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

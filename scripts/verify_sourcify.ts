@@ -8,12 +8,12 @@ import { sleep } from "./lib/common.js";
 const TARGETS = [
   { chainId: 11155111, address: "0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C", path: "contracts/NoxusCUSDC.sol", name: "NoxusCUSDC" },
   { chainId: 421614, address: "0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209", path: "contracts/NoxusCUSDC.sol", name: "NoxusCUSDC" },
-  // forward pair (ETH -> Arb)
-  { chainId: 11155111, address: "0x82688B8890Aab5744135cB26C3292eb821A4934A", path: "contracts/NoxusBatcher.sol", name: "NoxusBatcher" },
-  { chainId: 421614, address: "0x1a87F73D57BeF323376860a7B3f11f7C18AcE666", path: "contracts/NoxusDistributor.sol", name: "NoxusDistributor" },
+  // forward pair (ETH -> Arb) — batch entry points (preRegisterMany/depositMany)
+  { chainId: 11155111, address: "0x4eDbe88f04A547c20a3dfD3A7c7452479f3c7E77", path: "contracts/NoxusBatcher.sol", name: "NoxusBatcher" },
+  { chainId: 421614, address: "0xc5097a40C5Fd58E2Db5cb7989C9cBD85251583B2", path: "contracts/NoxusDistributor.sol", name: "NoxusDistributor" },
   // reverse pair (Arb -> ETH)
-  { chainId: 11155111, address: "0x3B9d67AD5B02a50d8B0db0890FCF2060BdcC80eC", path: "contracts/NoxusDistributor.sol", name: "NoxusDistributor" },
-  { chainId: 421614, address: "0x0c0695023920e4e8F89976773998fC77E7b2f000", path: "contracts/NoxusBatcher.sol", name: "NoxusBatcher" },
+  { chainId: 11155111, address: "0xbd259Aa982aBE9E8f3f5CD28d783AB452264A539", path: "contracts/NoxusDistributor.sol", name: "NoxusDistributor" },
+  { chainId: 421614, address: "0xAFF3778e41Df36c4895154196f7880969A1B482a", path: "contracts/NoxusBatcher.sol", name: "NoxusBatcher" },
 ];
 const SERVER = "https://sourcify.dev/server";
 

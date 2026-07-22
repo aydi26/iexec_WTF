@@ -87,6 +87,7 @@ contract NoxusDistributor {
     error BufferShort();
     error NotTimedOut();
     error AlreadyWired();
+    error LengthMismatch();
 
     constructor(
         IERC20 _usdc,
@@ -129,6 +130,35 @@ contract NoxusDistributor {
     {
         Epoch storage e = epochs[epochId];
         if (e.state != State.None && e.state != State.PreRegistering) revert BadState();
+        _preRegister(epochId, e, recipient, dstHandle, proof);
+    }
+
+    /// @notice Pre-register several destination claims in ONE transaction (one
+    /// wallet signature). Each element keeps its own owner-bound Nox input proof
+    /// exactly as in `preRegister` (F-1/F-2 anti-squatting unchanged); batching
+    /// only reduces the number of signatures. Arrays must be equal length.
+    function preRegisterMany(
+        uint256 epochId,
+        address[] calldata recipients,
+        externalEuint256[] calldata dstHandles,
+        bytes[] calldata proofs
+    ) external {
+        uint256 n = recipients.length;
+        if (n == 0 || dstHandles.length != n || proofs.length != n) revert LengthMismatch();
+        Epoch storage e = epochs[epochId];
+        if (e.state != State.None && e.state != State.PreRegistering) revert BadState();
+        for (uint256 i; i < n; ++i) {
+            _preRegister(epochId, e, recipients[i], dstHandles[i], proofs[i]);
+        }
+    }
+
+    function _preRegister(
+        uint256 epochId,
+        Epoch storage e,
+        address recipient,
+        externalEuint256 dstHandle,
+        bytes calldata proof
+    ) internal {
         bytes32 key = keccak256(abi.encode(recipient, externalEuint256.unwrap(dstHandle)));
         if (registered[epochId][key]) revert BadState();
         e.state = State.PreRegistering;
