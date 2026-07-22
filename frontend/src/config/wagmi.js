@@ -18,19 +18,25 @@ import { injected } from "wagmi/connectors";
 // is why the widget also surfaces guidance to switch a rate-limited wallet RPC.
 // RPC_URLS is exported so bridge.js can pin the Nox SDK's on-chain reads to the
 // same resilient pool (never the wallet's RPC).
-// Only browser-CORS-safe, non-rate-limited public endpoints, most-reliable
-// first (verified: publicnode + drpc answer the CORS preflight and eth_chainId;
-// 1rpc.io rate-limits and rpc.sepolia.org is dead — both dropped so viem's
-// fallback never wastes a hop on them).
+// CORS-safe endpoints. A private Alchemy Sepolia URL (if provided via the
+// VITE_ALCHEMY_SEPOLIA build env — the value lives only in .env / Vercel env,
+// never in source) is preferred for its high rate limits. IMPORTANT: the app
+// deliberately does NOT put publicnode first — many wallets (Rabby/MetaMask)
+// default to publicnode, and the app + the wallet share one IP's rate budget;
+// leading with Alchemy/drpc for the app's OWN reads leaves the wallet's
+// publicnode budget for its txs. (viem fallback still rotates on any 429.)
+const ALCHEMY_SEPOLIA = import.meta.env.VITE_ALCHEMY_SEPOLIA;
 export const RPC_URLS = {
   [sepolia.id]: [
-    "https://ethereum-sepolia-rpc.publicnode.com",
+    ...(ALCHEMY_SEPOLIA ? [ALCHEMY_SEPOLIA] : []),
     "https://sepolia.drpc.org",
+    "https://rpc.ankr.com/eth_sepolia",
+    "https://ethereum-sepolia-rpc.publicnode.com",
   ],
   [arbitrumSepolia.id]: [
-    "https://arbitrum-sepolia-rpc.publicnode.com",
-    "https://sepolia-rollup.arbitrum.io/rpc",
     "https://arbitrum-sepolia.drpc.org",
+    "https://sepolia-rollup.arbitrum.io/rpc",
+    "https://arbitrum-sepolia-rpc.publicnode.com",
   ],
 };
 
