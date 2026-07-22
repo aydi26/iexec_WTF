@@ -1,7 +1,7 @@
 import ProfileCard from "./ProfileCard";
 import "./TeamPage.css";
 
-import pfpRight from "../assets png/pfp card right.png";
+import pfpRight from "../assets png/aiden.png";
 
 export default function TeamPage() {
   return (

@@ -387,16 +387,16 @@ export default function BridgeFlow() {
   return (
     <div className="bridge-widget">
       <div className="bridge-header">
-        <div className="bridge-header-left">
-          <span className="bridge-title">Exchange</span>
-          <div className="bridge-tabs">
-            <button className={`bridge-tab ${view === "bridge" ? "active" : ""}`} onClick={() => setView("bridge")}>Bridge</button>
-            <button className={`bridge-tab ${view === "track" ? "active" : ""}`} onClick={() => setView("track")}>Track</button>
-          </div>
+        <div className="bridge-header-top">
+          <span className="bridge-title">Bridge confidential token via CCTP</span>
+          <button className={`bridge-settings-btn ${settingsOpen ? "active" : ""}`} title="About" onClick={() => setSettingsOpen((o) => !o)}>
+            <SettingsIcon />
+          </button>
         </div>
-        <button className={`bridge-settings-btn ${settingsOpen ? "active" : ""}`} title="About" onClick={() => setSettingsOpen((o) => !o)}>
-          <SettingsIcon />
-        </button>
+        <div className="bridge-tabs">
+          <button className={`bridge-tab ${view === "bridge" ? "active" : ""}`} onClick={() => setView("bridge")}>Bridge</button>
+          <button className={`bridge-tab ${view === "track" ? "active" : ""}`} onClick={() => setView("track")}>Track</button>
+        </div>
       </div>
 
       {settingsOpen && (
