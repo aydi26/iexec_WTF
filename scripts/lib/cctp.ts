@@ -14,18 +14,21 @@ const ERC20_ABI = ["function approve(address,uint256) returns (bool)", "function
 export const FAST_THRESHOLD = 1000;
 export const bytes32Addr = (a: string) => zeroPadValue(getAddress(a), 32);
 
-/** Live fast fee (bps) for src->dst from Iris, with a safety multiple. */
+/** Live fast fee (bps) for src->dst from Iris, with a safety multiple, CLAMPED to
+ *  the on-chain cap (settleEpoch/initiateRefund require maxFee <= amount/100). */
 export async function computeMaxFee(amount: bigint, srcDomain: number, dstDomain: number): Promise<bigint> {
+  const cap = amount / 100n; // 1% of A
+  const clamp = (v: bigint) => (cap > 0n && v > cap ? cap : v > 0n ? v : 1n);
   try {
     const r = await fetch(`${IRIS}/v2/burn/USDC/fees/${srcDomain}/${dstDomain}`, { signal: AbortSignal.timeout(15000) });
     const arr = (await r.json()) as Array<{ finalityThreshold: number; minimumFee: number }>;
     const fast = arr.find((x) => x.finalityThreshold <= 1000) ?? arr[0];
     const bps = fast?.minimumFee ?? 1;
-    // maxFee = ceil(amount * bps / 10000) * 3 (margin), min 1
+    // maxFee = ceil(amount * bps / 10000) * 3 (margin), then clamped to the cap.
     const fee = (amount * BigInt(Math.ceil(bps * 100)) + 999_999n) / 1_000_000n; // bps*100/1e6 = bps/1e4
-    return fee * 3n > 0n ? fee * 3n : 1n;
+    return clamp(fee * 3n);
   } catch {
-    return amount / 1000n > 0n ? amount / 1000n : 1n; // fallback 10 bps
+    return clamp(amount / 1000n); // fallback 10 bps, clamped
   }
 }
 

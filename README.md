@@ -95,10 +95,10 @@ The bridge is **bidirectional** — every chain hosts both a `NoxusBatcher` and 
 |---|---|---|---|
 | `NoxusCUSDC` (cUSDC) | ETH Sepolia | [`0x47d150…e41C`](https://sepolia.etherscan.io/address/0x47d150572dFCEB75C27b6dDf5EADc4D6fa33e41C) | confidential USDC |
 | `NoxusCUSDC` (cUSDC) | Arb Sepolia | [`0xD74A1F…0209`](https://sepolia.arbiscan.io/address/0xD74A1F2bF0285Dc64F7855D0233E774772Ab0209) | confidential USDC |
-| `NoxusBatcher` | ETH Sepolia | [`0x4eDbe8…7E77`](https://sepolia.etherscan.io/address/0x1a3534aBA28229392b881DC9f226F3b907a2b7FD) | source · ETH→Arb |
-| `NoxusDistributor` | Arb Sepolia | [`0xc5097a…83B2`](https://sepolia.arbiscan.io/address/0xF67242Fc24da75AD25c8B80b9FcfACbd9b5Ec499) | dest · ETH→Arb |
-| `NoxusBatcher` | Arb Sepolia | [`0xAFF377…482a`](https://sepolia.arbiscan.io/address/0x76A6507c819500Cc8793f70f8735Be5864B1dea3) | source · Arb→ETH |
-| `NoxusDistributor` | ETH Sepolia | [`0xbd259A…A539`](https://sepolia.etherscan.io/address/0x10c2430b89CeCBE08aabEA57E88AEC76B95F9c3f) | dest · Arb→ETH |
+| `NoxusBatcher` | ETH Sepolia | [`0x1a3534…b7FD`](https://sepolia.etherscan.io/address/0x1a3534aBA28229392b881DC9f226F3b907a2b7FD) | source · ETH→Arb |
+| `NoxusDistributor` | Arb Sepolia | [`0xF67242…c499`](https://sepolia.arbiscan.io/address/0xF67242Fc24da75AD25c8B80b9FcfACbd9b5Ec499) | dest · ETH→Arb |
+| `NoxusBatcher` | Arb Sepolia | [`0x76A650…dea3`](https://sepolia.arbiscan.io/address/0x76A6507c819500Cc8793f70f8735Be5864B1dea3) | source · Arb→ETH |
+| `NoxusDistributor` | ETH Sepolia | [`0x10c243…9c3f`](https://sepolia.etherscan.io/address/0x10c2430b89CeCBE08aabEA57E88AEC76B95F9c3f) | dest · Arb→ETH |
 
 > Interacts with **unmodified official deployments**: Circle CCTP V2 (`TokenMessengerV2` `0x8FE6…2DAA`, `MessageTransmitterV2` `0xE737…CE275`, identical on both testnets) and iExec Nox (`NoxCompute`). CCTP domains: Ethereum = 0, Arbitrum = 3. The contracts are direction-agnostic (CCTP domain + remote peer are constructor params), so a new chain is a deploy + wire once iExec Nox extends beyond these two testnets.
 
@@ -108,7 +108,7 @@ The frontend is a **single in-browser bridge widget**, live at **[iexecwtf.verce
 
 You can bridge to **any destination address** (not just your own): the sender registers the recipient's confidential claim, and the recipient decrypts their credit with their own key — the amount stays hidden. Anti-squatting still holds: a claim only resolves against the sender's source-authenticated committed deposit, and the recipient alone can reveal or spend it.
 
-Practical details: max **1 USDC per bridge** (testnet cap). The k=3 batch floor is met by the **operator keeper**: within ~5 s of a bridge starting, it contributes two 0.5 cUSD fillers from its own pre-wrapped liquidity (the fillers cycle back to the operator on the destination) — proven live in both directions. Your first bridge adds one-time funding (**max USDC approval** to our own Sourcify-verified wrapper + wrap + `setOperator`), ~5 signatures total; from the second bridge on it's the ~2 recurring signatures.
+Practical details: max **1 USDC per bridge** (testnet cap). The k=3 batch floor is met by the **operator keeper**: within ~5 s of a bridge starting, it contributes two **randomized fillers (0.20–0.70 cUSD each, drawn privately and encrypted)** from its own pre-wrapped liquidity (the fillers cycle back to the operator on the destination) — proven live in both directions. For stronger privacy, **pool mode** (a settings toggle) drops the fillers entirely and waits for two *independent* depositors (real k=3). Your first bridge adds one-time funding (**max USDC approval** to our own Sourcify-verified wrapper + wrap + `setOperator`), ~5 signatures total; from the second bridge on it's the ~2 recurring signatures.
 
 The keeper is a **liveness helper, not a trust point** (address `0x50ea6bF3D5e8B5F6A7b9Cc1842B09EfE01851abC`, gas-only key): every step it runs is gated by epoch state + the Circle attestation + the on-chain KMS proof, never by caller identity, so it cannot steal funds or alter amounts. And the bridge never hard-depends on it — if the keeper is unreachable the widget falls back to **client-side signing** of everything (~7 signatures with the batch entry points), and if the fill can't engage, **self-filler mode** lets you provide the three transfers yourself. On smart-account wallets, EIP-5792 atomic batching collapses phases further.
 

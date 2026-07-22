@@ -73,11 +73,6 @@ async function send(pub, wallet, params) {
   return wallet.writeContract(request);
 }
 
-async function sendNonce(pub, wallet, params, nonce) {
-  const { request } = await pub.simulateContract({ ...params, account: wallet.account });
-  return wallet.writeContract({ ...request, nonce });
-}
-
 async function publicDecryptWithRetry(hc, handle, timeoutMs = 45_000) {
   const t0 = Date.now();
   let delay = 1500;
@@ -94,15 +89,20 @@ async function publicDecryptWithRetry(hc, handle, timeoutMs = 45_000) {
 }
 
 async function computeMaxFee(amount, srcDomain, dstDomain) {
+  // settleEpoch/initiateRefund enforce require(maxFee <= amount/100), so the
+  // returned value MUST be clamped to that cap — otherwise a high Iris fee makes
+  // the 3x margin exceed 1% of A and the settle tx reverts, stranding the epoch.
+  const cap = amount / 100n; // 1% of A (the on-chain bound)
+  const clamp = (v) => (cap > 0n && v > cap ? cap : v > 0n ? v : 1n);
   try {
     const r = await fetch(`${IRIS}/v2/burn/USDC/fees/${srcDomain}/${dstDomain}`, { signal: AbortSignal.timeout(15000) });
     const arr = await r.json();
     const fast = arr.find((x) => x.finalityThreshold <= 1000) ?? arr[0];
     const bps = BigInt(Math.ceil((fast?.minimumFee ?? 1) * 100));
     const fee = (amount * bps + 999_999n) / 1_000_000n;
-    return fee * 3n > 0n ? fee * 3n : 1n;
+    return clamp(fee * 3n);
   } catch {
-    return amount / 1000n > 0n ? amount / 1000n : 1n;
+    return clamp(amount / 1000n);
   }
 }
 
@@ -129,24 +129,40 @@ async function doFill(route, epochId) {
     if (Number(info[0]) !== 0) return { skipped: true, reason: `epoch not open (state ${Number(info[0])})` };
     const activeCount = Number(info[1]);
     const entryCount = Number(info[4]);
+    // Idempotency by ON-CHAIN count (the in-memory dampener is per-warm-instance
+    // on serverless and shares nothing across cold starts / concurrent lambdas):
+    // count how many live filler deposits the keeper ALREADY has in this epoch,
+    // and only top up the gap. Non-keeper depositors present => it's a co-deposit
+    // (pool mode) — don't add fillers.
+    let ownedByKeeper = 0;
+    let othersPresent = false;
     for (let i = 0; i < entryCount; i++) {
       const d = await src.pub.readContract({ address: route.batcher, abi: BATCHER_ABI, functionName: "entryAt", args: [epochId, BigInt(i)] });
-      if (String(d[0]).toLowerCase() === me.toLowerCase() && !d[3]) return { skipped: true, reason: "already filled" };
+      if (d[3]) continue; // withdrawn
+      if (String(d[0]).toLowerCase() === me.toLowerCase()) ownedByKeeper += 1;
+      else othersPresent = true;
     }
-    if (activeCount > 1) return { skipped: true, reason: "epoch already has co-depositors" };
+    if (ownedByKeeper >= 2) return { skipped: true, reason: "already filled" };
+    const others = activeCount - ownedByKeeper;
+    if (others > 1 || othersPresent && others > 1) return { skipped: true, reason: "epoch already has co-depositors" };
+    const toFill = 2 - ownedByKeeper; // only the missing fillers
 
-    const units = [drawFiller(), drawFiller()]; // private to the operator
+    const units = Array.from({ length: toFill }, () => drawFiller()); // private to the operator
     const srcHc = await createViemHandleClient(src.wallet);
-    const need = units[0] + units[1];
-    try {
-      const balHandle = await src.pub.readContract({ address: route.cusdc, abi: CUSDC_ABI, functionName: "confidentialBalanceOf", args: [me] });
-      if (balHandle && balHandle !== `0x${"0".repeat(64)}`) {
-        const dec = await srcHc.decrypt(balHandle);
-        if (BigInt(dec.value) < need) return { skipped: true, reason: "keeper filler liquidity exhausted" };
-      } else {
-        return { skipped: true, reason: "keeper filler liquidity exhausted" };
-      }
-    } catch { /* gateway blip — proceed */ }
+    const need = units.reduce((a, b) => a + b, 0n);
+    // Fail CLOSED on a persistent liquidity-read failure: rather than deposit and
+    // risk enc(0) fillers (which would flip the integrity check), skip so the
+    // frontend falls back to self-filler mode. One bounded retry absorbs a blip.
+    let liq = null;
+    for (let i = 0; i < 2 && liq === null; i++) {
+      try {
+        const balHandle = await src.pub.readContract({ address: route.cusdc, abi: CUSDC_ABI, functionName: "confidentialBalanceOf", args: [me] });
+        if (!balHandle || balHandle === `0x${"0".repeat(64)}`) return { skipped: true, reason: "keeper filler liquidity exhausted" };
+        liq = BigInt((await srcHc.decrypt(balHandle)).value);
+      } catch { await sleep(1200); }
+    }
+    if (liq === null) return { skipped: true, reason: "keeper liquidity unreadable — deferring to self-filler" };
+    if (liq < need) return { skipped: true, reason: "keeper filler liquidity exhausted" };
 
     const dstHc = await createViemHandleClient(dst.wallet);
     const fills = [];
@@ -156,13 +172,17 @@ async function doFill(route, epochId) {
       fills.push({ dstEnc, srcEnc });
     }
 
-    const dstNonce = await dst.pub.getTransactionCount({ address: me, blockTag: "pending" });
-    const srcNonce = await src.pub.getTransactionCount({ address: me, blockTag: "pending" });
+    // No explicit nonces: each `send` awaits its writeContract, and viem reads the
+    // PENDING nonce per send — so the second src deposit sees the first in the
+    // mempool and takes nonce+1 automatically. Sequential awaits keep them ordered
+    // without paying for receipt confirmations (fill returns in ~5 s); the frontend
+    // polls the batch to 3/3 before asking for close. Concurrent cross-instance
+    // fills are backstopped by the on-chain idempotency count + TooManyClaims.
     const preHashes = [];
     const depHashes = [];
     for (let i = 0; i < fills.length; i++) {
-      preHashes.push(await sendNonce(dst.pub, dst.wallet, { address: route.distributor, abi: DIST_ABI, functionName: "preRegister", args: [epochId, me, fills[i].dstEnc.handle, fills[i].dstEnc.handleProof] }, dstNonce + i));
-      depHashes.push(await sendNonce(src.pub, src.wallet, { address: route.batcher, abi: BATCHER_ABI, functionName: "deposit", args: [me, fills[i].srcEnc.handle, fills[i].srcEnc.handleProof, fills[i].dstEnc.handle] }, srcNonce + i));
+      preHashes.push(await send(dst.pub, dst.wallet, { address: route.distributor, abi: DIST_ABI, functionName: "preRegister", args: [epochId, me, fills[i].dstEnc.handle, fills[i].dstEnc.handleProof] }));
+      depHashes.push(await send(src.pub, src.wallet, { address: route.batcher, abi: BATCHER_ABI, functionName: "deposit", args: [me, fills[i].srcEnc.handle, fills[i].srcEnc.handleProof, fills[i].dstEnc.handle] }));
     }
     return { preHashes, depHashes };
   } finally {
@@ -195,8 +215,14 @@ async function doSettle(route, epochId) {
 }
 
 async function settledTxHash(pub, route, epochId) {
+  // Bounded range: a full earliest->latest getLogs is rejected/capped by the
+  // non-archive public RPCs the keeper defaults to. An epoch settles minutes
+  // before this recovery runs, so the last ~50k blocks always contain it (Arb
+  // ~sub-second blocks, ETH ~12s — 50k covers days on ETH, hours on Arb).
   try {
-    const logs = await pub.getContractEvents({ address: route.batcher, abi: BATCHER_ABI, eventName: "EpochSettled", args: { epochId }, fromBlock: "earliest", toBlock: "latest" });
+    const tip = await pub.getBlockNumber();
+    const from = tip > 50_000n ? tip - 50_000n : 0n;
+    const logs = await pub.getContractEvents({ address: route.batcher, abi: BATCHER_ABI, eventName: "EpochSettled", args: { epochId }, fromBlock: from, toBlock: "latest" });
     return logs[logs.length - 1]?.transactionHash ?? null;
   } catch { return null; }
 }
@@ -276,6 +302,22 @@ export async function runPhase(body) {
 
 export const config = { maxDuration: 60 };
 
+// Best-effort per-warm-instance rate limit. The endpoint is intentionally
+// unauthenticated (every phase is permissionless by design and defended in depth:
+// simulate-before-send means no gas is spent on reverting calls, all phases are
+// idempotent/state-guarded so replays no-op, and `fill` is on-chain-capped to two
+// filler deposits per epoch). This limiter just blunts casual POST floods; it does
+// not (and need not) enforce hard security. A production edge would add real rate
+// limiting / origin binding — see SECURITY.md L-5.
+const RL = { hits: [], windowMs: 10_000, max: 20 };
+function rateLimited() {
+  const now = Date.now();
+  RL.hits = RL.hits.filter((t) => now - t < RL.windowMs);
+  if (RL.hits.length >= RL.max) return true;
+  RL.hits.push(now);
+  return false;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
@@ -286,6 +328,7 @@ export default async function handler(req, res) {
     catch (e) { return res.status(500).json({ error: String(e?.message || e) }); }
   }
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  if (rateLimited()) return res.status(429).json({ error: "rate limited — retry shortly" });
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const out = await runPhase(body);

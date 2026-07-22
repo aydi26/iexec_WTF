@@ -117,6 +117,29 @@ transfers have no receiver hooks to reenter through), but the ordering was wrong
 the external transfer, so a reentrant call cannot double-withdraw even in principle.
 Fixed in source, redeployed (all four directional contracts), and Sourcify-verified.
 
+### F-10 / F-11 — Fee-griefing surfaces, accepted (multi-agent audit, 2026-07-22)
+
+Two low-severity, no-fund-theft fee vectors surfaced by a full multi-agent code audit.
+They are **accepted for this testnet build** (fixing either changes a deployed,
+Sourcify-verified signature) and are stated here rather than hidden:
+
+- **F-10 — `settleEpoch`/`initiateRefund` maxFee front-run.** Both are permissionless
+  and take a caller-supplied `maxFee` bounded only by `require(maxFee <= A/100)`. The
+  keeper broadcasts the KMS proofs into the public mempool, so a front-runner can copy
+  them and settle first with `maxFee = A/100` (the max), making CCTP charge up to 1% of A
+  in fees that the operator's buffer/depositors absorb. **Not theft** (bounded, nothing
+  leaves to the attacker; cents at testnet sizes). Mitigation shipped off-chain: the keeper
+  now **clamps its own maxFee to the on-chain cap** so its normal path never over-pays and
+  never reverts. A production fix would gate these two functions to the keeper (trading off
+  the permissionless-liveness fallback) or bind the proofs to an intended `maxFee`.
+
+- **F-11 — `relayRefund` has no explicit fee-buffer precheck.** Unlike `finalizeEpoch`
+  (which has a `BufferShort` guard + `bufferShortfall()` view), `relayRefund` calls
+  `wrapper.wrap(A)` and reverts opaquely deep in the wrapper if the inbound refund fee
+  gap isn't pre-funded. Because effects precede the external call (CEI), the whole tx
+  reverts and state rolls back, so it is **retriable after a top-up** — not bricked. A
+  production build would add the mirroring precheck + shortfall view.
+
 ---
 
 ## Residual accepted limitations (testnet v1)

@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const { ethers } = require("hardhat");
 const {
   deployNoxStub, freshHandle, addr32, craftMessage, encodeHook,
-  expectRevert, increaseTime,
+  expectRevert, increaseTime, proofFor,
 } = require("./helpers.js");
 
 const SRC_DOMAIN = 0;
@@ -136,6 +136,25 @@ describe("NoxusDistributor — pre-registration, relay, fallback (L1, stubbed No
     await (await dist.connect(alice).requestClaimReveal(2n, 0n)).wait();
   });
 
+  it("resolveClaim reveals the plaintext amount and emits FallbackClaimRevealed (fallback lane)", async () => {
+    // epoch 2 sits in FallbackAttribution; claim #0 was just marked publicly
+    // decryptable by requestClaimReveal. The stub ECHOES the proof, so the
+    // revealed amount is exactly what we encode via proofFor.
+    const SOME_VALUE = 777_000n;
+    const rc = await (await dist.resolveClaim(2n, 0n, proofFor(SOME_VALUE))).wait();
+    const revealed = rc.logs
+      .map((l) => { try { return dist.interface.parseLog(l); } catch { return null; } })
+      .filter((e) => e && e.name === "FallbackClaimRevealed");
+    assert.equal(revealed.length, 1);
+    assert.equal(revealed[0].args.index, 0n);
+    assert.equal(revealed[0].args.recipient, alice.address);
+    assert.equal(revealed[0].args.amount, SOME_VALUE);
+    // the claim view now reflects the plaintext (informational only; gates nothing)
+    const claim = await dist.claimAt(2n, 0n);
+    assert.equal(claim[3], true); // revealed
+    assert.equal(claim[4], SOME_VALUE); // revealedAmount
+  });
+
   it("initiateRefund records the reverse CCTP burn on the mock messenger", async () => {
     // epoch 2 sits in FallbackAttribution; fund the fee-side USDC the refund needs
     await (await usdc.mint(dist.target, 2_000_000n)).wait();
@@ -148,5 +167,82 @@ describe("NoxusDistributor — pre-registration, relay, fallback (L1, stubbed No
 
   it("wirePeer is one-shot (AlreadyWired)", async () => {
     await expectRevert(dist.wirePeer(addr32(alice.address)), "AlreadyWired");
+  });
+});
+
+/** View-coherence + finalizeEpoch happy path. Isolated fixture so the fee-buffer
+ *  and check-handle assertions read a known lifecycle point without depending on
+ *  the ordered shared-state block above. */
+describe("NoxusDistributor — views & finalizeEpoch happy path (L1, stubbed Nox)", function () {
+  this.timeout(120_000);
+
+  let usdc, cusdc, messenger, transmitter, dist;
+  let deployer, alice, bob;
+  let remoteBatcher;
+
+  async function freshFixture() {
+    [deployer, alice, bob] = await ethers.getSigners();
+    await deployNoxStub();
+    usdc = await (await ethers.getContractFactory("MockUSDC")).deploy();
+    cusdc = await (await ethers.getContractFactory("NoxusCUSDC")).deploy(await usdc.getAddress());
+    messenger = await (await ethers.getContractFactory("MockTokenMessenger")).deploy();
+    transmitter = await (await ethers.getContractFactory("MockTransmitter")).deploy();
+    dist = await (await ethers.getContractFactory("NoxusDistributor")).deploy(
+      await usdc.getAddress(), await cusdc.getAddress(),
+      await transmitter.getAddress(), await messenger.getAddress(),
+      SRC_DOMAIN, FALLBACK_TIMEOUT,
+    );
+    remoteBatcher = addr32(ethers.Wallet.createRandom().address);
+    await (await dist.wirePeer(remoteBatcher)).wait();
+  }
+
+  const AGG = 1_050_000n;
+  const msgFor = (epochId, claims) => craftMessage({
+    sourceDomain: SRC_DOMAIN, mintRecipient: addr32(dist.target), amount: AGG,
+    messageSender: remoteBatcher, feeExecuted: 10n, hookData: encodeHook(epochId, claims),
+  });
+
+  before(freshFixture);
+
+  it("checkHandle is zero pre-check and non-zero after checkEpoch; bufferShortfall tracks the fee buffer", async () => {
+    // drive epoch 0 to CheckPending
+    const h = freshHandle();
+    await (await dist.connect(alice).preRegister(0n, alice.address, h, "0x12")).wait();
+    // before relay: no aggregate yet, so nothing is short
+    assert.equal(await dist.checkHandle(0n), ethers.ZeroHash);
+    assert.equal(await dist.bufferShortfall(0n), 0n);
+
+    await (await dist.relayReceive(msgFor(0n, [[alice.address, h]]), "0x")).wait();
+    // Received: aggregate known, contract holds no USDC -> short by the full A
+    assert.equal(await dist.bufferShortfall(0n), AGG);
+    assert.equal(await dist.checkHandle(0n), ethers.ZeroHash); // still no check handle
+
+    await (await dist.checkEpoch(0n)).wait();
+    assert.equal(Number((await dist.epochInfo(0n))[0]), 3); // CheckPending
+    assert.notEqual(await dist.checkHandle(0n), ethers.ZeroHash); // check handle now set
+
+    // topping up USDC closes the shortfall (F-4: anyone can top up)
+    await (await usdc.mint(dist.target, AGG)).wait();
+    assert.equal(await dist.bufferShortfall(0n), 0n);
+  });
+
+  it("finalizeEpoch (check==1): wraps A and confidentially distributes -> Distributed", async () => {
+    // epoch 0 is CheckPending and funded with A from the previous test.
+    // Stub echoes the proof, so proofFor(1) makes publicDecrypt(checkNum)==1.
+    await (await dist.finalizeEpoch(0n, proofFor(1n))).wait();
+    assert.equal(Number((await dist.epochInfo(0n))[0]), 4); // Distributed
+    // finalize is one-shot: state left CheckPending
+    await expectRevert(dist.finalizeEpoch(0n, proofFor(1n)), "BadState");
+  });
+
+  it("finalizeEpoch (check!=1): routes the epoch to FallbackAttribution instead of distributing", async () => {
+    // fresh epoch 1 -> CheckPending, funded, but reveal != 1
+    const h = freshHandle();
+    await (await dist.connect(bob).preRegister(1n, bob.address, h, "0x34")).wait();
+    await (await dist.relayReceive(msgFor(1n, [[bob.address, h]]), "0x")).wait();
+    await (await dist.checkEpoch(1n)).wait();
+    await (await usdc.mint(dist.target, AGG)).wait();
+    await (await dist.finalizeEpoch(1n, proofFor(0n))).wait(); // check==0 -> fallback
+    assert.equal(Number((await dist.epochInfo(1n))[0]), 5); // FallbackAttribution
   });
 });

@@ -62,8 +62,13 @@ function isCorsLikeError(e) {
   );
 }
 
-/** Live fast fee (bps) for src->dst from Iris, with a safety multiple. */
+/** Live fast fee (bps) for src->dst from Iris, with a safety multiple, CLAMPED to
+ *  the on-chain cap: settleEpoch/initiateRefund require(maxFee <= amount/100), so
+ *  a high Iris fee times the 3x margin must never exceed 1% of A or the settle
+ *  reverts and strands the epoch. */
 async function computeMaxFee(amount, srcDomain, dstDomain) {
+  const cap = amount / 100n; // 1% of A (the on-chain bound)
+  const clamp = (v) => (cap > 0n && v > cap ? cap : v > 0n ? v : 1n);
   try {
     const r = await fetch(`${IRIS}/v2/burn/USDC/fees/${srcDomain}/${dstDomain}`, {
       signal: AbortSignal.timeout(15000),
@@ -71,17 +76,16 @@ async function computeMaxFee(amount, srcDomain, dstDomain) {
     const arr = await r.json();
     const fast = arr.find((x) => x.finalityThreshold <= 1000) ?? arr[0];
     const bps = BigInt(Math.ceil((fast?.minimumFee ?? 1) * 100));
-    // maxFee = ceil(amount * bps / 1e6) * 3 (margin), min 1  [bps*100/1e6 = bps/1e4]
+    // maxFee = ceil(amount * bps / 1e6) * 3 (margin), then clamped to the cap.
     const fee = (amount * bps + 999_999n) / 1_000_000n;
-    return fee * 3n > 0n ? fee * 3n : 1n;
+    return clamp(fee * 3n);
   } catch (e) {
     if (isCorsLikeError(e)) {
-      // Fall back to a safe on-chain fee estimate (10 bps) so a CORS-blocked
-      // fee lookup does not abort the whole flow. The relay leg (which also
-      // needs Iris) will surface the CORS guidance if it is truly blocked.
-      return amount / 1000n > 0n ? amount / 1000n : 1n;
+      // CORS-blocked fee lookup -> safe 10 bps estimate (still clamped); the relay
+      // leg surfaces the CORS guidance if Iris is truly unreachable.
+      return clamp(amount / 1000n);
     }
-    return amount / 1000n > 0n ? amount / 1000n : 1n; // fallback 10 bps
+    return clamp(amount / 1000n); // fallback 10 bps
   }
 }
 
@@ -234,28 +238,29 @@ function isTransientRpc(e) {
   return /rate.?limit|too many requests|429|limit exceeded|timeout|timed out|failed to fetch|network ?error|load failed|econn|503|502|-32005|temporarily|try again/i.test(s);
 }
 
-// writeContract with a bounded retry on transient RPC / rate-limit errors. The
-// nonce guard makes retrying safe: if the account nonce advanced after the error,
-// a tx already went out, so we STOP (surface the error) rather than risk a
-// double-send. User-rejections and real reverts are never retried.
+// writeContract with a bounded retry on transient RPC / rate-limit errors.
+// Double-send safety: we PIN one nonce (read once, before the loop) and reuse it
+// on every retry. If the first attempt actually broadcast before erroring, the
+// node already has that nonce, so the retry is rejected as "nonce too low /
+// already known" — never a second distinct tx. (The old before/after comparison
+// missed this: pending already counts the broadcast tx while latest lags, so an
+// advance was almost never detected and viem would auto-assign a fresh nonce.)
+// User-rejections and real reverts are never retried.
 async function writeResilient(wallet, pub, params, onNote) {
   const addr = params.account?.address ?? params.account;
+  let pinnedNonce;
+  if (pub && addr) {
+    try { pinnedNonce = await pub.getTransactionCount({ address: addr, blockTag: "pending" }); } catch { /* fall back to wallet-managed nonce */ }
+  }
+  const call = pinnedNonce != null ? { ...params, nonce: pinnedNonce } : params;
   for (let attempt = 0; ; attempt++) {
-    let nonceBefore = null;
     try {
-      if (pub && addr) nonceBefore = await pub.getTransactionCount({ address: addr, blockTag: "pending" });
-    } catch { /* best-effort */ }
-    try {
-      return await wallet.writeContract(params);
+      return await wallet.writeContract(call);
     } catch (e) {
+      // A retry that hits the already-broadcast tx surfaces as nonce-too-low /
+      // already-known — treat that as success-in-flight, not an error to retry.
+      if (/nonce too low|already known|already imported|replacement transaction/i.test(String(e?.shortMessage || e?.message || e))) throw e;
       if (isUserReject(e) || !isTransientRpc(e) || attempt >= 3) throw e;
-      // Did a tx land despite the RPC error? If so, don't re-send.
-      if (pub && addr && nonceBefore != null) {
-        await sleep(2500);
-        let after = null;
-        try { after = await pub.getTransactionCount({ address: addr, blockTag: "latest" }); } catch { /* ignore */ }
-        if (after != null && after > nonceBefore) throw e;
-      }
       onNote?.(`RPC busy — retrying (${attempt + 1}/3)…`);
       await sleep(1500 * (attempt + 1));
     }
@@ -308,7 +313,11 @@ async function tryBatch(wallet, waitReceipt, calls) {
   // that would re-execute the same calls (double-spend). Resolve to success or
   // throw. forceAtomic => a failure means the whole bundle reverted (no partial
   // state), so throwing lets the user retry the flow cleanly.
-  if (!id) throw new Error("Batched transaction submitted but no bundle id was returned — please retry.");
+  // If sendCalls resolved without an id we cannot track the bundle; because it
+  // MAY be in flight, we throw a clear message (never fall back) — retrying the
+  // whole flow is safe (atomic bundle, no partial state) and the batch either
+  // never landed or is idempotent-checked by the on-chain guards on retry.
+  if (!id) throw new Error("Wallet accepted the batch but returned no tracking id — check your wallet, the bridge may have gone through; retry only if it didn't.");
   const res = await waitForCallsStatus(wallet, { id, timeout: 240_000 });
   const ok =
     res.status === "success" ||
@@ -444,7 +453,13 @@ export async function resumeConfidentialBridge({ keeper, route, epochId, publicC
     dstState = Number(di[0]);
   } catch { /* treat as not yet relayed */ }
   if (dstState === 4 || dstState === 6) return { alreadyComplete: true };
-  if (dstState >= 2) {
+  // State 5 (FallbackAttribution) can't be resumed to a confidential distribution
+  // — the integrity check already failed and the refund lane owns this epoch.
+  if (dstState === 5) {
+    throw new Error("this epoch failed its integrity check and is in the refund lane — a recipient can reveal their own claim (requestClaimReveal); it cannot be resumed to distribution");
+  }
+  // Only Received(2) or CheckPending(3) are resumable on the destination.
+  if (dstState === 2 || dstState === 3) {
     step("resume", "active", "mint already relayed — running check + finalize…");
     if (dstState === 2) await keeper("relaycheck", { direction: route.key, epochId: eid.toString(), message: null, attestation: null });
     const f = await keeper("finalize", { direction: route.key, epochId: eid.toString() });
@@ -656,12 +671,19 @@ export async function runConfidentialBridge({
         address: CUSDC_ADDRESS, abi: CUSDC_ABI, functionName: "confidentialBalanceOf", args: [me],
       });
       if (balHandle && balHandle !== ZERO_BYTES32) {
+        // decrypt() signs (private reveal), so it must use the real wallet client
+        // — not the RPC-pinned read-only one. Bounded retry so a transient gateway
+        // blip doesn't spuriously mark the balance unknown and over-wrap.
         const hc = await createViemHandleClient(wallet);
-        const dec = await hc.decrypt(balHandle);
+        let dec, lastErr;
+        for (let i = 0; i < 3 && dec === undefined; i++) {
+          try { dec = await hc.decrypt(balHandle); } catch (e) { lastErr = e; await sleep(1200 * (i + 1)); }
+        }
+        if (dec === undefined) throw lastErr;
         confBal = BigInt(dec.value);
       }
     } catch {
-      confBal = 0n; // cannot read/decrypt -> assume underfunded
+      confBal = 0n; // cannot read/decrypt -> assume underfunded (wrap headroom, funds are the user's)
       confBalKnown = false;
     }
 
@@ -789,13 +811,24 @@ export async function runConfidentialBridge({
       });
       if (Number(st[0]) === 0) {
         step("close", "active", "batch full — confirm closeEpoch in wallet");
-        const ch = await writeResilient(
-          wallet, publicClientSource,
-          { address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "closeEpoch", args: [], account: wallet.account, chain: wallet.chain },
-          (n) => step("close", "active", `close · ${n}`)
-        );
-        await waitSrc(ch);
-        step("close", "done", "epoch closed", ch, SRC);
+        try {
+          const ch = await writeResilient(
+            wallet, publicClientSource,
+            { address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "closeEpoch", args: [], account: wallet.account, chain: wallet.chain },
+            (n) => step("close", "active", `close · ${n}`)
+          );
+          await waitSrc(ch);
+          step("close", "done", "epoch closed", ch, SRC);
+        } catch (ce) {
+          // TOCTOU: a co-depositor may have closed it between our read and write
+          // (closeEpoch reverts NotOpen). If it's now Closed/Settled, that's fine
+          // — proceed. Otherwise it's a real failure.
+          const st2 = await publicClientSource.readContract({
+            address: BATCHER_ADDRESS, abi: BATCHER_ABI, functionName: "epochInfo", args: [epochId],
+          });
+          if (Number(st2[0]) === 0) throw ce; // still Open -> genuine failure
+          step("close", "done", "already closed by a co-depositor");
+        }
       } else {
         step("close", "done", "already closed by a co-depositor");
       }

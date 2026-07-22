@@ -178,7 +178,8 @@ export default function BridgeFlow() {
   const [bridges, setBridges] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState(null);
-  const [resuming, setResuming] = useState({}); // row key -> live status text
+  const [resuming, setResuming] = useState({}); // row key -> live status text (display only)
+  const resumingRef = useRef(new Set()); // in-flight resume guard (NOT the display text)
 
   const route = buildRoute(direction);
   const configReady = !!route.batcher && !!route.distributor && !!route.destCusdc;
@@ -303,10 +304,13 @@ export default function BridgeFlow() {
           const complete = dState === 4 || dState === 6 || refunded === true;
           if (!started || complete) continue;
           let phase, agg = null;
-          if (dState >= 1) {
+          // Pre-registration (dState 1) happens on the destination BEFORE the
+          // source deposits/close/settle, so dState 1 does NOT mean "awaiting
+          // relay" — the source leg is still in flight. Only dState >= 2 (the mint
+          // has actually landed) should drive the destination-side phase text.
+          if (dState >= 2) {
             agg = dAgg;
             phase =
-              dState === 1 ? `Pre-registered — awaiting CCTP relay on ${r.dstLabel}` :
               dState === 2 ? "Relayed — awaiting integrity check" :
               dState === 3 ? "Checked — awaiting finalize + distribution" :
               dState === 5 ? "Integrity failed — awaiting refund to source" :
@@ -316,6 +320,7 @@ export default function BridgeFlow() {
               bState === 0 ? `Collecting deposits (${activeCount}/3)` :
               bState === 1 ? "Closed — awaiting settle + CCTP burn" :
               bState === 2 ? `Bridged via CCTP — awaiting relay on ${r.dstLabel}` :
+              dState === 1 ? `Pre-registered — collecting deposits (${activeCount}/3)` :
               "In progress";
             if (bState === 2) agg = bAgg;
           }
@@ -338,7 +343,10 @@ export default function BridgeFlow() {
   // Resume a stuck/in-flight epoch entirely through the keeper (no signature —
   // every remaining step is permissionless). Kills the "no in-app recovery" gap.
   async function resumeRow(b) {
-    if (resuming[b.key] && !/failed|✓|—/.test(resuming[b.key])) return; // already running
+    // Guard on a ref-backed Set, NOT the display text (step details can contain
+    // any characters, incl. em-dashes, so pattern-matching the status was unsafe).
+    if (resumingRef.current.has(b.key)) return;
+    resumingRef.current.add(b.key);
     setResuming((s) => ({ ...s, [b.key]: "resuming…" }));
     try {
       const r = buildRoute(b.routeKey);
@@ -355,6 +363,8 @@ export default function BridgeFlow() {
       scanBridges();
     } catch (e) {
       setResuming((s) => ({ ...s, [b.key]: `failed: ${(e?.shortMessage || e?.message || "error").slice(0, 110)}` }));
+    } finally {
+      resumingRef.current.delete(b.key);
     }
   }
 

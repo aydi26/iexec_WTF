@@ -215,7 +215,7 @@ const docsTree = [
         {
           title: "Documented, not hidden",
           items: [
-            "The aggregate A is public (it is the CCTP burn amount) — privacy needs >= 2 depositors/epoch",
+            "The aggregate A is public (it is the CCTP burn amount) — privacy needs >= 3 depositors/epoch (the enforced k=3 floor)",
             "Participant sets and timing are visible — this is confidentiality, not a mixer",
             "Auditor grants are add-only on-chain (iExec Nox has no removeViewer) — see Security",
             "Confidentiality rests on the iExec Nox TEE + threshold-KMS + gateway trust model",
