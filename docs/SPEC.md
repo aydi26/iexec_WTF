@@ -281,6 +281,18 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 **Open:** video + X post; optional WalletConnect (projectId) + multi-account k>1 demo.
 **feedback.md candidates:** none new.
 
+#### Session 16 — 2026-07-22 — claude — Grading-panel remediation: F-9 CEI redeploy, 21-test L1 suite, Resume UX
+**Context:** a 3-judge neutral grading panel (security / hackathon / product lenses) scored the project 80–83/100 and produced concrete findings. User directive: fix every fixable weakness.
+**Done:**
+- **F-9 (new finding, fixed):** `withdrawDeposit` did its external `confidentialTransfer` before setting `withdrawn`/decrementing `activeCount` — CEI ordering the F-3/F-8 pass missed. Fixed (effects before interactions), full 4-contract redeploy (cUSDC reused), wired, buffers 5/3/5/3, keeper operator set, all 4 Sourcify `exact_match`. New set: fwd Batcher@ETH `0x1a3534aB…b7FD` / Distributor@Arb `0xF67242Fc…c499`; rev Distributor@ETH `0x10c2430b…9c3f` / Batcher@Arb `0x76A6507c…dea3`. Re-proven live E2E (preRegisterMany+depositMany → A=1050000 → check==1 → Distributed). Addresses synced (docs, manifests ×3, Sourcify targets, SPEC STATE).
+- **L1 unit tests (killed the "zero automated tests" finding):** 21 tests green (`hardhat test`) — real Batcher/Distributor/CCTPMessageParser under test against a `NoxComputeStub` injected at the pinned 31337 NoxCompute address via `hardhat_setCode` (address verified in the installed Nox lib), MockUSDC/MockTransmitter/MockTokenMessenger, CCTP MessageV2 blobs crafted at exact offsets. Covers: state machines, min/max guards, `LengthMismatch` on both batch entry points, F-9 withdraw accounting, BadOrigin/short-msg relay rejection, hasMissing→declareFallback, forceFallback timing (evm_increaseTime), recipient-only reveal, refund-of-exactly-A. `audit:privacy` still PASS. (Harness partially salvaged from a session-limited test agent's worktree; specs authored in-session.)
+- **UX truth + recovery:** keeper-mode recap now shows the TRUE revealed A (was: user amount); stale "fillers returned to you" copy rewritten; **Resume button** on Track rows — `resumeConfidentialBridge()` drives all remaining permissionless steps through the keeper, state-aware, zero signatures, actionable errors (kills "no in-app recovery").
+- **Latent race found by the re-proof:** keeper `relaycheck` could silently skip `checkEpoch` when the post-receipt state read was stale — re-read loops added to relaycheck + finalize.
+- **Docs:** SECURITY.md gains F-9 + the explicit dust-deposit griefing economics + the unauthenticated-keeper-endpoint bounds. `.claude/` gitignored.
+**Verified (LIVE, 2026-07-22):** CEI set E2E complete (state 4, A=1050000, claims 3); Sourcify exact_match ×4; 21/21 tests; prod bundle + keeper confirmed serving the CEI set post-deploy.
+**Open (user):** video ≤ 4 min + X post. Accepted (documented, not fixable tonight): k=1 practical anonymity without organic co-depositors; WalletConnect/mobile; professional audit.
+**feedback.md candidates:** none new.
+
 #### Session 15 — 2026-07-22 — claude — Contract batching + root keeper deploy + final audit pass
 **Context:** real-user browser tests kept failing on wallet-RPC rate limits (Rabby → Tenderly, then publicnode: `eth_gasPrice`/`eth_getTransactionCount` 429). Root cause = transaction COUNT, not RPC choice. User directives: "REDUIS LE NOMBRE DE TX", keep Vercel building from the repo root, then full audit/cleanup/docs pass + neutral grading.
 **Done:**
