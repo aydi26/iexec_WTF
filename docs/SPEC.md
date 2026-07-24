@@ -404,4 +404,4 @@ Pre-run epoch #1 fully; run epoch #2 live (Fast Transfer makes the bridge leg ~8
 ## 14. License & Disclaimer
 
 Our code: **MIT**. Interacts with unmodified third-party deployments (Circle CCTP V2, iExec Nox — their licenses apply). Testnet-only, unaudited, hackathon software — never use with real funds. Not affiliated with Circle or iExec.
-**Team:** <fill, ≤5> · **Contact:** <Discord> · **X post:** <link after submission, tag @iEx_ec>
+**Team:** Aiden (solo) · **Contact:** X [@aiden_7788](https://x.com/aiden_7788) · Telegram @aiden_7788 · **X post:** <link after submission, tag @iEx_ec>

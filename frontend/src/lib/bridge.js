@@ -375,7 +375,37 @@ async function keeperAvailable(keeper) {
   }
 }
 
-async function runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc, waitDst, SRC, DST, SRC_DOMAIN }) {
+// Client-side mirror of the keeper's burn-tx recovery: the app's RPCs differ
+// from the keeper's, so each side covers the other's getLogs blind spots. One
+// wide-range query, then a newest-first chunked scan (free tiers cap ranges
+// differently). Window/chunk per chain: 50k blocks ≈ 7 days on ETH Sepolia but
+// only hours on Arb Sepolia (sub-second blocks).
+async function recoverSettleTx(publicClientSource, route, epochId) {
+  try {
+    const { window, chunk } =
+      route.srcChainId === 421614 ? { window: 600_000n, chunk: 45_000n } : { window: 50_000n, chunk: 9_500n };
+    const tip = await publicClientSource.getBlockNumber();
+    const from = tip > window ? tip - window : 0n;
+    const query = async (fromBlock, toBlock) => {
+      const logs = await publicClientSource.getContractEvents({
+        address: route.batcher, abi: BATCHER_ABI, eventName: "EpochSettled",
+        args: { epochId }, fromBlock, toBlock,
+      });
+      return logs[logs.length - 1]?.transactionHash ?? null;
+    };
+    try { return await query(from, "latest"); } catch { /* wide range rejected — chunk */ }
+    for (let hi = tip; hi > from; ) {
+      const lo = hi - chunk + 1n > from ? hi - chunk + 1n : from;
+      const h = await query(lo, hi);
+      if (h) return h;
+      if (lo <= from) break;
+      hi = lo - 1n;
+    }
+  } catch { /* fall through to null */ }
+  return null;
+}
+
+async function runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc, waitDst, SRC, DST, SRC_DOMAIN, publicClientSource }) {
   const eid = epochId.toString();
   const dir = route.key;
 
@@ -387,10 +417,15 @@ async function runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc,
   step("settle", "active", "keeper settling + bridging via CCTP…");
   const s = await keeper("settle", { direction: dir, epochId: eid });
   if (s?.hash) await waitSrc(s.hash);
-  const settleTxHash = s?.hash;
+  let settleTxHash = s?.hash;
+  if (!settleTxHash && publicClientSource) {
+    // Already-settled epoch whose burn tx the keeper couldn't recover from its
+    // own RPCs — retry the log lookup through the app's RPC transport.
+    step("settle", "active", "recovering the burn tx from logs (app RPC)…");
+    settleTxHash = await recoverSettleTx(publicClientSource, route, BigInt(eid));
+  }
   if (!settleTxHash) {
-    // Already-settled epoch whose burn tx the keeper couldn't recover from logs
-    // (non-archive RPC) — fail fast instead of polling Iris with no tx hash.
+    // Fail fast instead of polling Iris with no tx hash.
     throw new Error("epoch already settled but the burn tx could not be recovered — retry shortly (or set a private RPC for the keeper)");
   }
   step("settle", "done", `settled + burned by the keeper · A=${s?.aggregate ?? total.toString()}`, settleTxHash, SRC);
@@ -483,6 +518,7 @@ export async function resumeConfidentialBridge({ keeper, route, epochId, publicC
   return runKeeperBackHalf({
     keeper, route, epochId: eid, total: 0n, step, waitSrc, waitDst,
     SRC: route.srcChainId, DST: route.dstChainId, SRC_DOMAIN: route.srcDomain,
+    publicClientSource,
   });
 }
 
@@ -795,7 +831,7 @@ export async function runConfidentialBridge({
     }
   }
   if (useKeeper) {
-    const kr = await runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc, waitDst, SRC, DST, SRC_DOMAIN });
+    const kr = await runKeeperBackHalf({ keeper, route, epochId, total, step, waitSrc, waitDst, SRC, DST, SRC_DOMAIN, publicClientSource });
     settleTxHash = kr.settleTxHash;
     aggregate = kr.aggregate;
   } else {

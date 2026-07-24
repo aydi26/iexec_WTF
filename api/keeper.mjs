@@ -38,6 +38,22 @@ const CHAINS = {
   421614: { chain: arbitrumSepolia, domain: 3, rpc: process.env.ARB_SEPOLIA_RPC_URL || "https://arbitrum-sepolia-rpc.publicnode.com" },
 };
 
+// getLogs support varies wildly across free RPC tiers (publicnode 403s wide
+// ranges, Alchemy free caps at 10 blocks) — the burn-tx recovery walks these
+// logs-capable public fallbacks after the configured RPC. Window/chunk are
+// per-chain: 50k blocks ≈ 7 days on ETH Sepolia but only hours on Arb Sepolia
+// (sub-second blocks), so Arb gets a much wider window.
+const LOGS = {
+  11155111: {
+    window: 50_000n, chunk: 9_500n,
+    rpcs: ["https://sepolia.drpc.org", "https://ethereum-sepolia.blockpi.network/v1/rpc/public", "https://eth-sepolia.public.blastapi.io", "https://1rpc.io/sepolia"],
+  },
+  421614: {
+    window: 600_000n, chunk: 45_000n,
+    rpcs: ["https://sepolia-rollup.arbitrum.io/rpc", "https://arbitrum-sepolia.drpc.org", "https://arbitrum-sepolia.blockpi.network/v1/rpc/public"],
+  },
+};
+
 function account() {
   const pk = process.env.KEEPER_PRIVATE_KEY;
   if (!pk) throw new Error("KEEPER_PRIVATE_KEY is not set on the server.");
@@ -215,16 +231,40 @@ async function doSettle(route, epochId) {
 }
 
 async function settledTxHash(pub, route, epochId) {
-  // Bounded range: a full earliest->latest getLogs is rejected/capped by the
-  // non-archive public RPCs the keeper defaults to. An epoch settles minutes
-  // before this recovery runs, so the last ~50k blocks always contain it (Arb
-  // ~sub-second blocks, ETH ~12s — 50k covers days on ETH, hours on Arb).
-  try {
-    const tip = await pub.getBlockNumber();
-    const from = tip > 50_000n ? tip - 50_000n : 0n;
-    const logs = await pub.getContractEvents({ address: route.batcher, abi: BATCHER_ABI, eventName: "EpochSettled", args: { epochId }, fromBlock: from, toBlock: "latest" });
-    return logs[logs.length - 1]?.transactionHash ?? null;
-  } catch { return null; }
+  // Recover the settle/burn tx of an already-Settled epoch from EpochSettled
+  // logs. The configured RPC is tried first, then the LOGS fallbacks; each RPC
+  // gets one wide-range query, then a newest-first chunked scan (free tiers cap
+  // ranges differently). Bounded by one overall deadline so the serverless
+  // settle phase stays snappy; null only if every route is exhausted.
+  const chainId = route.srcChainId;
+  const { window, chunk, rpcs } = LOGS[chainId];
+  const deadline = Date.now() + 20_000;
+  const candidates = [pub, ...rpcs.filter((u) => u !== CHAINS[chainId].rpc).map((u) => createPublicClient({ chain: CHAINS[chainId].chain, transport: http(u) }))];
+  for (const c of candidates) {
+    if (Date.now() > deadline) break;
+    let tip;
+    try { tip = await c.getBlockNumber(); } catch { continue; }
+    const from = tip > window ? tip - window : 0n;
+    const query = async (fromBlock, toBlock) => {
+      const logs = await c.getContractEvents({ address: route.batcher, abi: BATCHER_ABI, eventName: "EpochSettled", args: { epochId }, fromBlock, toBlock });
+      return logs[logs.length - 1]?.transactionHash ?? null;
+    };
+    try {
+      const h = await query(from, "latest");
+      if (h) return h;
+      continue; // wide range accepted but no event in the window — try next RPC
+    } catch { /* wide range rejected — fall through to the chunked scan */ }
+    try {
+      for (let hi = tip; hi > from && Date.now() < deadline; ) {
+        const lo = hi - chunk + 1n > from ? hi - chunk + 1n : from;
+        const h = await query(lo, hi);
+        if (h) return h;
+        if (lo <= from) break;
+        hi = lo - 1n;
+      }
+    } catch { /* this RPC rejects even chunked queries — next candidate */ }
+  }
+  return null;
 }
 
 async function doAttest(domain, txHash) {
