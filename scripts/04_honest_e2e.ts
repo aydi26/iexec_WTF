@@ -3,7 +3,7 @@
  * Depositors pre-register dst claims on Arb (option B), deposit encrypted amounts
  * on ETH, the batch settles + bridges one public aggregate A, the Distributor
  * relays the mint, runs the on-chain integrity check (Sum == A), and distributes
- * confidentially. Amounts 0.10 / 0.15 / 0.20 USDC (self as recipient for the smoke).
+ * confidentially. Amounts 0.02 / 0.03 / 0.05 USDC = A 0.10 (self as recipient for the smoke).
  */
 import { Contract } from "ethers";
 import { CHAINS, connect, handleClient, deployments, artifact, ADDR, publicDecryptWithRetry } from "./lib/common.js";
@@ -35,7 +35,7 @@ async function main() {
   const amounts = [20_000n, 30_000n, 50_000n]; // 0.02/0.03/0.05 = 0.10 (small, conserves faucet USDC)
   const total = amounts.reduce((a, b) => a + b, 0n);
   const epochId = await batcher.currentEpoch();
-  console.log(`\n=== Honest E2E — epoch ${epochId}, A=${total} (0.45 USDC) ===`);
+  console.log(`\n=== Honest E2E — epoch ${epochId}, A=${total} (${Number(total) / 1e6} USDC) ===`);
 
   // pre-fund cUSDC + operator on the source
   const wrapAmt = 120_000n; // 0.12 cUSDC (margin over the 0.10 deposited)
