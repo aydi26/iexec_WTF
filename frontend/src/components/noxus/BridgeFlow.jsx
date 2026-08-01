@@ -437,7 +437,7 @@ export default function BridgeFlow() {
               <div className="bridge-card-header">
                 <UsdcBadge chain={route.srcShort} />
                 <div className="bridge-card-text">
-                  <span className="bridge-card-title">USDC</span>
+                  <span className="bridge-card-title">cUSDC</span>
                   <span className="bridge-card-subtitle">on {route.srcLabel}</span>
                 </div>
               </div>
@@ -461,7 +461,7 @@ export default function BridgeFlow() {
               <div className="bridge-card-header">
                 <UsdcBadge chain={route.dstShort} />
                 <div className="bridge-card-text">
-                  <span className="bridge-card-title">USDC</span>
+                  <span className="bridge-card-title">cUSDC</span>
                   <span className="bridge-card-subtitle">on {route.dstLabel}</span>
                 </div>
               </div>
